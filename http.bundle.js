@@ -5344,8 +5344,6 @@ class CurrentRequest {
 }
 function setResponseCommonHeader() {
     this.httpResponse.headers.set("Content-Type", "application/dns-message");
-    this.httpResponse.headers.set("Access-Control-Allow-Origin", "*");
-    this.httpResponse.headers.set("Access-Control-Allow-Headers", "*");
     this.httpResponse.headers.append("Vary", "Origin");
     this.httpResponse.headers.delete("expect-ct");
     this.httpResponse.headers.delete("cf-ray");
@@ -7140,11 +7138,7 @@ class CommandControl {
             } else {
                 response.data.httpResponse = new Response(null, {
                     status: 400,
-                    statusText: "Bad Request",
-                    headers: {
-                        "Access-Control-Allow-Origin": "*",
-                        "Access-Control-Allow-Headers": "*"
-                    }
+                    statusText: "Bad Request"
                 });
             }
         }
@@ -7191,12 +7185,8 @@ class CommandControl {
                 response.data.stopProcessing = false;
             } else {
                 response.data.httpResponse = new Response(null, {
-                    "status": 400,
-                    "statusText": "Bad Request",
-                    "headers": {
-                        "Access-Control-Allow-Origin": "*",
-                        "Access-Control-Allow-Headers": "*"
-                    }
+                    status: 400,
+                    statusText: "Bad Request"
                 });
             }
         } catch (e) {
@@ -7205,8 +7195,6 @@ class CommandControl {
             response.exceptionFrom = "CommandControl commandOperation";
             response.data.httpResponse = new Response(JSON.stringify(response.exceptionStack));
             response.data.httpResponse.headers.set("Content-Type", "application/json");
-            response.data.httpResponse.headers.set("Access-Control-Allow-Origin", "*");
-            response.data.httpResponse.headers.set("Access-Control-Allow-Headers", "*");
         }
         return response;
     }
@@ -7243,8 +7231,6 @@ function domainNameToList(queryString, blocklistFilter) {
     }
     let response = new Response(JSON.stringify(returndata));
     response.headers.set("Content-Type", "application/json");
-    response.headers.set("Access-Control-Allow-Origin", "*");
-    response.headers.set("Access-Control-Allow-Headers", "*");
     return response;
 }
 function domainNameToUint(queryString, blocklistFilter) {
@@ -7264,8 +7250,6 @@ function domainNameToUint(queryString, blocklistFilter) {
     }
     let response = new Response(JSON.stringify(returndata));
     response.headers.set("Content-Type", "application/json");
-    response.headers.set("Access-Control-Allow-Origin", "*");
-    response.headers.set("Access-Control-Allow-Headers", "*");
     return response;
 }
 function listToB64(queryString, blocklistFilter) {
@@ -7279,8 +7263,6 @@ function listToB64(queryString, blocklistFilter) {
     returndata.b64String = blocklistFilter.getB64FlagFromTag(list.split(","), flagVersion);
     let response = new Response(JSON.stringify(returndata));
     response.headers.set("Content-Type", "application/json");
-    response.headers.set("Access-Control-Allow-Origin", "*");
-    response.headers.set("Access-Control-Allow-Headers", "*");
     return response;
 }
 function b64ToList(queryString, blocklistFilter) {
@@ -7302,8 +7284,6 @@ function b64ToList(queryString, blocklistFilter) {
     }
     response = new Response(JSON.stringify(returndata));
     response.headers.set("Content-Type", "application/json");
-    response.headers.set("Access-Control-Allow-Origin", "*");
-    response.headers.set("Access-Control-Allow-Headers", "*");
     return response;
 }
 class UserOperation {
@@ -7606,6 +7586,10 @@ class Env {
     }
 }
 const env = new Env();
+const corsHeaders = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "*"
+};
 if (typeof addEventListener !== "undefined") {
     addEventListener("fetch", (event)=>{
         if (!env.isLoaded) {
@@ -7623,10 +7607,12 @@ if (typeof addEventListener !== "undefined") {
                     let resp = new Response(dnsParser.Encode({
                         type: "response",
                         flags: 4098
-                    }));
-                    resp.headers.set("Content-Type", "application/dns-message");
-                    resp.headers.set("Access-Control-Allow-Origin", "*");
-                    resp.headers.set("Access-Control-Allow-Headers", "*");
+                    }), {
+                        headers: {
+                            ...corsHeaders,
+                            "Content-Type": "application/dns-message"
+                        }
+                    });
                     setTimeout(()=>{
                         resolve(resp);
                     }, workerTimeout);
@@ -7647,10 +7633,9 @@ async function proxyRequest(event) {
     try {
         if (event.request.method === "OPTIONS") {
             res = new Response(null, {
-                "status": 204
+                status: 204,
+                headers: corsHeaders
             });
-            res.headers.set("Access-Control-Allow-Origin", "*");
-            res.headers.set("Access-Control-Allow-Headers", "*");
             return res;
         }
         if (!env.isLoaded) {
@@ -7658,6 +7643,8 @@ async function proxyRequest(event) {
         }
         const plugin = new RethinkPlugin(event, env);
         await plugin.executePlugin(currentRequest);
+        currentRequest.httpResponse.headers.set("Access-Control-Allow-Origin", "*");
+        currentRequest.httpResponse.headers.set("Access-Control-Allow-Headers", "*");
         return currentRequest.httpResponse;
     } catch (e) {
         console.error(e.stack);
