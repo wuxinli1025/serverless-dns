@@ -7131,6 +7131,21 @@ class CommandControl {
         response.data.stopProcessing = false;
         if (param.request.method === "GET") {
             response = this.commandOperation(param.request.url, param.blocklistFilter, param.request.headers);
+        } else if (param.request.method === "POST") {
+            response.data.stopProcessing = true;
+            const isPOSTDnsMsg = headers.get("Accept") == "application/dns-message" || headers.get("Content-Type") == "application/dns-message";
+            if (isPOSTDnsMsg) {
+                response.data.stopProcessing = false;
+            } else {
+                response.data.httpResponse = new Response(null, {
+                    "status": 400,
+                    "statusText": "Bad Request",
+                    "headers": {
+                        "Access-Control-Allow-Origin": "*",
+                        "Access-Control-Allow-Headers": "*"
+                    }
+                });
+            }
         }
         return response;
     }
@@ -7142,14 +7157,18 @@ class CommandControl {
         response.exceptionFrom = "";
         response.data = {
         };
-        const isDnsMsg = headers.get("Accept") == "application/dns-message" || headers.get("Content-Type") == "application/dns-message";
+        const isGETDnsMsg = headers.get("Accept") == "application/dns-message";
         try {
             response.data.stopProcessing = true;
             response.data.httpResponse;
-            let reqUrl = new URL(url);
-            let queryString = reqUrl.searchParams;
-            let pathSplit = reqUrl.pathname.split("/");
+            const reqUrl = new URL(url);
+            const queryString = reqUrl.searchParams;
+            const pathSplit = reqUrl.pathname.split("/");
             let command = pathSplit[1];
+            if (!command) {
+                const d = reqUrl.host.split(".");
+                command = d.length > 3 && d[2] === "rethinkdns" ? d[0] : "";
+            }
             const weburl = command == "" ? "https://rethinkdns.com/configure" : "https://rethinkdns.com/configure?s=added#" + command;
             if (command == "listtob64") {
                 response.data.httpResponse = listToB64.call(this, queryString, blocklistFilter);
@@ -7165,7 +7184,7 @@ class CommandControl {
                     b64UserFlag = pathSplit[2];
                 }
                 response.data.httpResponse = configRedirect.call(this, b64UserFlag, reqUrl.origin);
-            } else if (!isDnsMsg) {
+            } else if (!isGETDnsMsg) {
                 response.data.httpResponse = Response.redirect(weburl, 302);
             } else if (queryString.has("dns")) {
                 response.data.stopProcessing = false;
