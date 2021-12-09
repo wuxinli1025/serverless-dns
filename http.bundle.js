@@ -5105,6 +5105,8 @@ class LocalCache {
         }
     }
 }
+const ttlGraceSec = 30;
+const lfuSize = 2000;
 class DNSResolver {
     constructor(){
         this.dnsParser = new DNSParserWrap();
@@ -5112,114 +5114,119 @@ class DNSResolver {
         this.wCache = false;
     }
     async RethinkModule(param) {
-        let response = {
-        };
-        response.isException = false;
-        response.exceptionStack = "";
-        response.exceptionFrom = "";
-        response.data = {
-        };
+        let response = emptyResponse();
         try {
             if (!this.dnsResCache) {
-                this.dnsResCache = new LocalCache("dns-response-cache", 2000);
+                this.dnsResCache = new LocalCache("dns-response-cache", lfuSize);
                 if (param.runTimeEnv == "worker") {
                     this.wCache = caches.default;
                 }
             }
             response.data = await checkLocalCacheBfrResolve.call(this, param);
         } catch (e) {
-            response.isException = true;
-            response.exceptionStack = e.stack;
-            response.exceptionFrom = "DNSResolver RethinkModule";
-            response.data = false;
+            response = errResponse(e);
             console.error("Error At : DNSResolver -> RethinkModule");
             console.error(e.stack);
         }
         return response;
     }
 }
-async function checkLocalCacheBfrResolve(param) {
-    let resp = {
+function emptyResponse() {
+    return {
+        isException: false,
+        exceptionStack: "",
+        exceptionFrom: "",
+        data: {
+        },
+        responseDecodedDnsPacket: null,
+        responseBodyBuffer: null
     };
-    resp.responseDecodedDnsPacket = null;
-    resp.responseBodyBuffer = null;
+}
+function errResponse(e) {
+    return {
+        isException: true,
+        exceptionStack: e.stack,
+        exceptionFrom: "DNSResolver RethinkModule",
+        data: false,
+        responseDecodedDnsPacket: null,
+        responseBodyBuffer: null
+    };
+}
+async function checkLocalCacheBfrResolve(param) {
+    let resp = emptyResponse();
     const dn = (param.requestDecodedDnsPacket.questions.length > 0 ? param.requestDecodedDnsPacket.questions[0].name : "").trim().toLowerCase() + ":" + param.requestDecodedDnsPacket.questions[0].type;
+    const now = Date.now();
     let cacheRes = this.dnsResCache.Get(dn);
-    let now = Date.now();
-    if (!cacheRes || now >= cacheRes.data.ttlEndTime + 30) {
-        cacheRes = await checkSecondLevelCacheBfrResolve.call(this, param.runTimeEnv, param.request.url, dn);
+    if (!cacheRes || now >= cacheRes.data.ttlEndTime) {
+        cacheRes = await checkSecondLevelCacheBfrResolve.call(this, param.runTimeEnv, param.request.url, dn, now);
         if (!cacheRes) {
             cacheRes = {
             };
-            resp.responseBodyBuffer = await resolveDnsUpdateCache.call(this, param, cacheRes, dn);
+            resp.responseBodyBuffer = await resolveDnsUpdateCache.call(this, param, cacheRes, dn, now);
             resp.responseDecodedDnsPacket = cacheRes.data.decodedDnsPacket;
-        } else {
-            resp.responseDecodedDnsPacket = cacheRes.data.decodedDnsPacket;
-            resp.responseDecodedDnsPacket.id = param.requestDecodedDnsPacket.id;
-            resp.responseBodyBuffer = await loadDnsResponseFromCache.call(this, resp.responseDecodedDnsPacket, cacheRes.data.ttlEndTime);
+            this.dnsResCache.Put(cacheRes);
+            return resp;
         }
-    } else {
-        resp.responseDecodedDnsPacket = cacheRes.data.decodedDnsPacket;
-        resp.responseDecodedDnsPacket.id = param.requestDecodedDnsPacket.id;
-        resp.responseBodyBuffer = await loadDnsResponseFromCache.call(this, resp.responseDecodedDnsPacket, cacheRes.data.ttlEndTime);
     }
-    this.dnsResCache.Put(cacheRes);
+    resp.responseDecodedDnsPacket = cacheRes.data.decodedDnsPacket;
+    resp.responseDecodedDnsPacket.id = param.requestDecodedDnsPacket.id;
+    resp.responseBodyBuffer = await loadDnsResponseFromCache.call(this, resp.responseDecodedDnsPacket, cacheRes.data.ttlEndTime, now);
     return resp;
 }
-async function loadDnsResponseFromCache(dnsPacket, ttlEndTime) {
-    let now = Date.now();
-    if (dnsPacket.answers.length > 0) {
-        dnsPacket.answers[0].ttl = Math.max(Math.floor((ttlEndTime - now) / 1000), 30);
+async function loadDnsResponseFromCache(dnsPacket, ttlEndTime, now) {
+    const outttl = Math.max(Math.floor((ttlEndTime - now) / 1000), 1);
+    for (let answer of dnsPacket.answers){
+        answer.ttl = outttl;
     }
     return this.dnsParser.Encode(dnsPacket);
 }
-async function checkSecondLevelCacheBfrResolve(runTimeEnv, reqUrl, dn) {
-    if (runTimeEnv == "worker") {
-        let wCacheUrl = new URL(new URL(reqUrl).origin + "/" + dn);
-        let resp = await this.wCache.match(wCacheUrl);
-        if (resp) {
-            let cacheRes = {
-            };
-            cacheRes.k = dn;
-            cacheRes.data = {
-            };
-            cacheRes.data.decodedDnsPacket = await this.dnsParser.Decode(await resp.arrayBuffer());
-            let metaData = JSON.parse(resp.headers.get("x-rethink-metadata"));
-            cacheRes.data.ttlEndTime = metaData.ttlEndTime;
-            cacheRes.data.addTime = metaData.addTime;
-            let now = Date.now();
-            if (now >= cacheRes.data.ttlEndTime + 30) {
-                return false;
-            }
-            return cacheRes;
-        }
+async function checkSecondLevelCacheBfrResolve(runTimeEnv, reqUrl, dn, now) {
+    if (runTimeEnv !== "worker") {
+        return false;
     }
-    return false;
+    let wCacheUrl = new URL(new URL(reqUrl).origin + "/" + dn);
+    let resp = await this.wCache.match(wCacheUrl);
+    if (resp) {
+        const metaData = JSON.parse(resp.headers.get("x-rethink-metadata"));
+        if (now >= cacheRes.data.ttlEndTime) {
+            return false;
+        }
+        let cacheRes = {
+        };
+        cacheRes.k = dn;
+        cacheRes.data = {
+        };
+        cacheRes.data.decodedDnsPacket = await this.dnsParser.Decode(await resp.arrayBuffer());
+        cacheRes.data.ttlEndTime = metaData.ttlEndTime;
+        return cacheRes;
+    }
 }
-async function resolveDnsUpdateCache(param, cacheRes, dn) {
+async function resolveDnsUpdateCache(param, cacheRes, dn, now) {
     let responseBodyBuffer = await (await resolveDns(param.request, param.dnsResolverUrl, param.requestBodyBuffer, param.runTimeEnv)).arrayBuffer();
     let decodedDnsPacket = await this.dnsParser.Decode(responseBodyBuffer);
-    let ttl = decodedDnsPacket.answers.length == 1 ? Math.max(decodedDnsPacket.answers[0].ttl, 60) : 300;
+    let minttl = 0;
+    for (let answer of decodedDnsPacket.answers){
+        minttl = minttl <= 0 || minttl > answer.ttl ? answer.ttl : minttl;
+    }
+    minttl = Math.max(minttl + ttlGraceSec, 60);
     cacheRes.k = dn;
     cacheRes.data = {
     };
     cacheRes.data.decodedDnsPacket = decodedDnsPacket;
-    cacheRes.data.ttlEndTime = ttl * 1000 + Date.now();
-    cacheRes.data.addTime = Date.now();
+    cacheRes.data.ttlEndTime = minttl * 1000 + now;
     if (param.runTimeEnv == "worker") {
         let wCacheUrl = new URL(new URL(param.request.url).origin + "/" + dn);
         let response = new Response(responseBodyBuffer, {
             headers: {
-                'Cache-Control': 's-maxage=' + ttl,
-                'Content-Length': responseBodyBuffer.length,
-                'Content-Type': 'application/octet-stream',
-                'x-rethink-metadata': JSON.stringify({
-                    ttlEndTime: cacheRes.data.ttlEndTime,
-                    addTime: cacheRes.data.addTime
+                "Cache-Control": "s-maxage=" + minttl,
+                "Content-Length": responseBodyBuffer.length,
+                "Content-Type": "application/octet-stream",
+                "x-rethink-metadata": JSON.stringify({
+                    ttlEndTime: cacheRes.data.ttlEndTime
                 })
             },
             cf: {
-                cacheTtl: ttl
+                cacheTtl: minttl
             }
         });
         param.event.waitUntil(this.wCache.put(wCacheUrl, response));
@@ -5235,7 +5242,7 @@ async function resolveDns(request, resolverUrl, requestBodyBuffer, runTimeEnv) {
         u.port = dnsResolverUrl.port;
         u.protocol = dnsResolverUrl.protocol;
         const headers = {
-            "Accept": "application/dns-message"
+            Accept: "application/dns-message"
         };
         let newRequest;
         if (request.method === "GET" || runTimeEnv == "worker" && request.method === "POST") {
