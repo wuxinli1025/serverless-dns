@@ -4968,126 +4968,97 @@ function checkDomainNameUserFlagIntersection1(userBlocklistFlagUint, flagVersion
     return response;
 }
 class LfuCache {
-    constructor(lfuname, size){
-        this.lfuname = lfuname;
-        this.lfuCachemap = new Map();
-        this.lfuCachearray = [];
+    constructor(lfuName, size){
+        this.lfuName = lfuName;
+        this.lfuCacheMap = new Map();
+        this.lfuCacheArray = [];
         this.lfuCacheSize = size;
         this.lfuCacheIndex = -1;
         this.lfustart = -1;
         this.lfuend = 0;
     }
     Get(key) {
-        let cachedata = false;
+        let cacheData = false;
         try {
-            if (this.lfuCachemap.has(key)) {
-                cachedata = this.lfuCachearray[this.lfuCachemap.get(key)];
-            }
+            cacheData = this.lfuCacheArray[this.lfuCacheMap.get(key)];
         } catch (e) {
             console.log("Error At : LfuCache -> Get");
             console.log(e.stack);
-            throw e;
         }
-        return cachedata;
+        return cacheData;
     }
-    Put(cachedata) {
+    Put(cacheData) {
         try {
-            datatolfu.call(this, cachedata);
+            this.dataToLfu(cacheData);
         } catch (e) {
             console.log("Error At : LfuCache -> Put");
             console.log(e.stack);
-            throw e;
         }
     }
 }
-function removeaddlfuCache(key, data) {
-    try {
-        let arraydata = {
-        };
-        arraydata = data;
+LfuCache.prototype.removeAddLfuCache = function(key, data) {
+    let arraydata = data;
+    arraydata.n = this.lfustart;
+    arraydata.p = -1;
+    this.lfuCacheMap.delete(this.lfuCacheArray[this.lfuend].k);
+    this.lfuCacheArray[this.lfustart].p = this.lfuend;
+    this.lfustart = this.lfuend;
+    this.lfuend = this.lfuCacheArray[this.lfuend].p;
+    this.lfuCacheArray[this.lfuend].n = -1;
+    this.lfuCacheMap.set(key, this.lfustart);
+    this.lfuCacheArray[this.lfustart] = arraydata;
+};
+LfuCache.prototype.updateLfuCache = function(key, data) {
+    let accindex = this.lfuCacheMap.get(key);
+    if (accindex != this.lfustart) {
+        if (data.n == -1) {
+            this.lfuend = data.p;
+            this.lfuCacheArray[this.lfuend].n = -1;
+        } else {
+            this.lfuCacheArray[data.n].p = data.p;
+            this.lfuCacheArray[data.p].n = data.n;
+        }
+        data.p = -1;
+        data.n = this.lfustart;
+        this.lfuCacheArray[this.lfustart].p = accindex;
+        this.lfustart = accindex;
+    }
+};
+LfuCache.prototype.simpleAddLruCache = function(key, data) {
+    let arraydata = {
+    };
+    arraydata = data;
+    if (this.lfuCacheIndex == -1) {
+        arraydata.n = -1;
+        arraydata.p = -1;
+        this.lfustart = 0;
+        this.lfuend = 0;
+        this.lfuCacheIndex++;
+    } else {
+        this.lfuCacheIndex++;
         arraydata.n = this.lfustart;
         arraydata.p = -1;
-        this.lfuCachemap.delete(this.lfuCachearray[this.lfuend].k);
-        this.lfuCachearray[this.lfustart].p = this.lfuend;
-        this.lfustart = this.lfuend;
-        this.lfuend = this.lfuCachearray[this.lfuend].p;
-        this.lfuCachearray[this.lfuend].n = -1;
-        this.lfuCachemap.set(key, this.lfustart);
-        this.lfuCachearray[this.lfustart] = arraydata;
-    } catch (e) {
-        console.log("Error At : LfuCache -> removeaddlfuCache");
-        console.log(e.stack);
-        throw e;
+        this.lfuCacheArray[this.lfustart].p = this.lfuCacheIndex;
+        this.lfustart = this.lfuCacheIndex;
     }
-}
-function updatelfucache(key, data) {
-    try {
-        let accindex = this.lfuCachemap.get(key);
-        if (accindex != this.lfustart) {
-            if (data.n == -1) {
-                this.lfuend = data.p;
-                this.lfuCachearray[this.lfuend].n = -1;
-            } else {
-                this.lfuCachearray[data.n].p = data.p;
-                this.lfuCachearray[data.p].n = data.n;
-            }
-            data.p = -1;
-            data.n = this.lfustart;
-            this.lfuCachearray[this.lfustart].p = accindex;
-            this.lfustart = accindex;
-        }
-    } catch (e) {
-        console.log("Error At : LfuCache -> updatelfucache");
-        console.log(e.stack);
-        throw e;
-    }
-}
-function simpleaddlurCache(key, data) {
-    try {
-        let arraydata = {
-        };
-        arraydata = data;
-        if (this.lfuCacheIndex == -1) {
-            arraydata.n = -1;
-            arraydata.p = -1;
-            this.lfustart = 0;
-            this.lfuend = 0;
-            this.lfuCacheIndex++;
+    this.lfuCacheMap.set(key, this.lfuCacheIndex);
+    this.lfuCacheArray[this.lfuCacheIndex] = {
+    };
+    this.lfuCacheArray[this.lfuCacheIndex] = arraydata;
+};
+LfuCache.prototype.dataToLfu = function(value) {
+    if (this.lfuCacheMap.has(value.k)) {
+        let oldValue = this.lfuCacheArray[this.lfuCacheMap.get(value.k)];
+        oldValue.data = value.data;
+        this.updateLfuCache(value.k, oldValue);
+    } else {
+        if (this.lfuCacheIndex > this.lfuCacheSize - 2) {
+            this.removeAddLfuCache(value.k, value);
         } else {
-            this.lfuCacheIndex++;
-            arraydata.n = this.lfustart;
-            arraydata.p = -1;
-            this.lfuCachearray[this.lfustart].p = this.lfuCacheIndex;
-            this.lfustart = this.lfuCacheIndex;
+            this.simpleAddLruCache(value.k, value);
         }
-        this.lfuCachemap.set(key, this.lfuCacheIndex);
-        this.lfuCachearray[this.lfuCacheIndex] = {
-        };
-        this.lfuCachearray[this.lfuCacheIndex] = arraydata;
-    } catch (e) {
-        console.log("Error At : LfuCache -> simpleaddlurCache");
-        console.log(e.stack);
-        throw e;
     }
-}
-function datatolfu(data) {
-    try {
-        if (this.lfuCachemap.has(data.k)) {
-            data = this.lfuCachearray[this.lfuCachemap.get(data.k)];
-            updatelfucache.call(this, data.k, data);
-        } else {
-            if (this.lfuCacheIndex > this.lfuCacheSize - 2) {
-                removeaddlfuCache.call(this, data.k, data);
-            } else {
-                simpleaddlurCache.call(this, data.k, data);
-            }
-        }
-    } catch (e) {
-        console.log("Error At : LfuCache -> datatolfu");
-        console.log(e.stack);
-        throw e;
-    }
-}
+};
 class LocalCache {
     constructor(cacheName, size){
         this.localCache = new LfuCache(cacheName, size);
@@ -5122,7 +5093,7 @@ class DNSResolver {
                     this.wCache = caches.default;
                 }
             }
-            response.data = await checkLocalCacheBfrResolve.call(this, param);
+            response.data = await this.checkLocalCacheBfrResolve(param);
         } catch (e) {
             response = errResponse(e);
             console.error("Error At : DNSResolver -> RethinkModule");
@@ -5131,38 +5102,18 @@ class DNSResolver {
         return response;
     }
 }
-function emptyResponse() {
-    return {
-        isException: false,
-        exceptionStack: "",
-        exceptionFrom: "",
-        data: {
-        },
-        responseDecodedDnsPacket: null,
-        responseBodyBuffer: null
-    };
-}
-function errResponse(e) {
-    return {
-        isException: true,
-        exceptionStack: e.stack,
-        exceptionFrom: "DNSResolver RethinkModule",
-        data: false,
-        responseDecodedDnsPacket: null,
-        responseBodyBuffer: null
-    };
-}
-async function checkLocalCacheBfrResolve(param) {
+DNSResolver.prototype.checkLocalCacheBfrResolve = async function(param) {
     let resp = emptyResponse();
     const dn = (param.requestDecodedDnsPacket.questions.length > 0 ? param.requestDecodedDnsPacket.questions[0].name : "").trim().toLowerCase() + ":" + param.requestDecodedDnsPacket.questions[0].type;
     const now = Date.now();
     let cacheRes = this.dnsResCache.Get(dn);
-    if (!cacheRes || now >= cacheRes.data.ttlEndTime) {
-        cacheRes = await checkSecondLevelCacheBfrResolve.call(this, param.runTimeEnv, param.request.url, dn, now);
+    if (!cacheRes || now >= cacheRes.data.expiry) {
+        cacheRes = await this.checkSecondLevelCacheBfrResolve(param.runTimeEnv, param.request.url, dn, now);
         if (!cacheRes) {
             cacheRes = {
             };
-            resp.responseBodyBuffer = await resolveDnsUpdateCache.call(this, param, cacheRes, dn, now);
+            resp.responseBodyBuffer = await (await resolveDnsUpstream(param.request, param.dnsResolverUrl, param.requestBodyBuffer, param.runTimeEnv)).arrayBuffer();
+            await this.updateCache(param, cacheRes, dn, now, resp.responseBodyBuffer);
             resp.responseDecodedDnsPacket = cacheRes.data.decodedDnsPacket;
             this.dnsResCache.Put(cacheRes);
             return resp;
@@ -5170,17 +5121,17 @@ async function checkLocalCacheBfrResolve(param) {
     }
     resp.responseDecodedDnsPacket = cacheRes.data.decodedDnsPacket;
     resp.responseDecodedDnsPacket.id = param.requestDecodedDnsPacket.id;
-    resp.responseBodyBuffer = await loadDnsResponseFromCache.call(this, resp.responseDecodedDnsPacket, cacheRes.data.ttlEndTime, now);
+    resp.responseBodyBuffer = await this.loadDnsResponseFromCache(resp.responseDecodedDnsPacket, cacheRes.data.expiry, now);
     return resp;
-}
-async function loadDnsResponseFromCache(dnsPacket, ttlEndTime, now) {
-    const outttl = Math.max(Math.floor((ttlEndTime - now) / 1000), 1);
+};
+DNSResolver.prototype.loadDnsResponseFromCache = async function(dnsPacket, expiry, now) {
+    const outttl = Math.max(Math.floor((expiry - now) / 1000), 1);
     for (let answer of dnsPacket.answers){
         answer.ttl = outttl;
     }
     return this.dnsParser.Encode(dnsPacket);
-}
-async function checkSecondLevelCacheBfrResolve(runTimeEnv, reqUrl, dn, now) {
+};
+DNSResolver.prototype.checkSecondLevelCacheBfrResolve = async function(runTimeEnv, reqUrl, dn, now) {
     if (runTimeEnv !== "worker") {
         return false;
     }
@@ -5188,7 +5139,7 @@ async function checkSecondLevelCacheBfrResolve(runTimeEnv, reqUrl, dn, now) {
     let resp = await this.wCache.match(wCacheUrl);
     if (resp) {
         const metaData = JSON.parse(resp.headers.get("x-rethink-metadata"));
-        if (now >= cacheRes.data.ttlEndTime) {
+        if (now >= cacheRes.data.expiry) {
             return false;
         }
         let cacheRes = {
@@ -5197,12 +5148,11 @@ async function checkSecondLevelCacheBfrResolve(runTimeEnv, reqUrl, dn, now) {
         cacheRes.data = {
         };
         cacheRes.data.decodedDnsPacket = await this.dnsParser.Decode(await resp.arrayBuffer());
-        cacheRes.data.ttlEndTime = metaData.ttlEndTime;
+        cacheRes.data.expiry = metaData.expiry;
         return cacheRes;
     }
-}
-async function resolveDnsUpdateCache(param, cacheRes, dn, now) {
-    let responseBodyBuffer = await (await resolveDns(param.request, param.dnsResolverUrl, param.requestBodyBuffer, param.runTimeEnv)).arrayBuffer();
+};
+DNSResolver.prototype.updateCache = async function(param, cacheRes, dn, now, responseBodyBuffer) {
     let decodedDnsPacket = await this.dnsParser.Decode(responseBodyBuffer);
     let minttl = 0;
     for (let answer of decodedDnsPacket.answers){
@@ -5213,7 +5163,7 @@ async function resolveDnsUpdateCache(param, cacheRes, dn, now) {
     cacheRes.data = {
     };
     cacheRes.data.decodedDnsPacket = decodedDnsPacket;
-    cacheRes.data.ttlEndTime = minttl * 1000 + now;
+    cacheRes.data.expiry = minttl * 1000 + now;
     if (param.runTimeEnv == "worker") {
         let wCacheUrl = new URL(new URL(param.request.url).origin + "/" + dn);
         let response = new Response(responseBodyBuffer, {
@@ -5222,7 +5172,7 @@ async function resolveDnsUpdateCache(param, cacheRes, dn, now) {
                 "Content-Length": responseBodyBuffer.length,
                 "Content-Type": "application/octet-stream",
                 "x-rethink-metadata": JSON.stringify({
-                    ttlEndTime: cacheRes.data.ttlEndTime
+                    expiry: cacheRes.data.expiry
                 })
             },
             cf: {
@@ -5231,9 +5181,8 @@ async function resolveDnsUpdateCache(param, cacheRes, dn, now) {
         });
         param.event.waitUntil(this.wCache.put(wCacheUrl, response));
     }
-    return responseBodyBuffer;
-}
-async function resolveDns(request, resolverUrl, requestBodyBuffer, runTimeEnv) {
+};
+async function resolveDnsUpstream(request, resolverUrl, requestBodyBuffer, runTimeEnv) {
     try {
         let u = new URL(request.url);
         let dnsResolverUrl = new URL(resolverUrl);
@@ -5268,6 +5217,27 @@ async function resolveDns(request, resolverUrl, requestBodyBuffer, runTimeEnv) {
     } catch (e) {
         throw e;
     }
+}
+function emptyResponse() {
+    return {
+        isException: false,
+        exceptionStack: "",
+        exceptionFrom: "",
+        data: {
+        },
+        responseDecodedDnsPacket: null,
+        responseBodyBuffer: null
+    };
+}
+function errResponse(e) {
+    return {
+        isException: true,
+        exceptionStack: e.stack,
+        exceptionFrom: "DNSResolver RethinkModule",
+        data: false,
+        responseDecodedDnsPacket: null,
+        responseBodyBuffer: null
+    };
 }
 class CurrentRequest {
     constructor(){
