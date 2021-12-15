@@ -4738,12 +4738,11 @@ function decodeList(list, enc, buf, offset) {
 class DNSParserWrap {
     constructor(){
     }
-    async Decode(arrayBuffer) {
+    Decode(arrayBuffer) {
         try {
             return decode2(Buffer.from(new Uint8Array(arrayBuffer)));
         } catch (e) {
             console.error("Error At : DNSParserWrap -> Decode");
-            console.error(e.stack);
             throw e;
         }
     }
@@ -4752,14 +4751,64 @@ class DNSParserWrap {
             return encode2(DecodedDnsPacket);
         } catch (e) {
             console.error("Error At : DNSParserWrap -> Encode");
-            console.error(e.stack);
             throw e;
         }
     }
 }
+class DNSBlockOperation {
+    checkDomainBlocking(userBlocklistFlagUint, userServiceListUint, flagVersion, blocklistMap, blocklistFilter, domainName) {
+        let response;
+        try {
+            response = checkDomainNameUserFlagIntersection(userBlocklistFlagUint, flagVersion, blocklistMap, blocklistFilter, domainName);
+            if (response.isBlocked) {
+                return response;
+            }
+            if (userServiceListUint) {
+                let dnSplit = domainName.split(".");
+                let dnJoin = "";
+                let wildCardResponse;
+                while(dnSplit.shift() != undefined){
+                    dnJoin = dnSplit.join(".");
+                    wildCardResponse = checkDomainNameUserFlagIntersection(userServiceListUint, flagVersion, blocklistMap, blocklistFilter, dnJoin);
+                    if (wildCardResponse.isBlocked) {
+                        return wildCardResponse;
+                    }
+                }
+            }
+        } catch (e) {
+            throw e;
+        }
+        return response;
+    }
+}
+function checkDomainNameUserFlagIntersection(userBlocklistFlagUint, flagVersion, blocklistMap, blocklistFilter, domainName) {
+    let response = {
+    };
+    try {
+        response.isBlocked = false;
+        response.blockedB64Flag = "";
+        response.blockedTag = [];
+        if (blocklistMap.has(domainName)) {
+            let domainNameInBlocklistUint = blocklistMap.get(domainName);
+            let blockedUint = blocklistFilter.flagIntersection(userBlocklistFlagUint, domainNameInBlocklistUint);
+            if (blockedUint) {
+                response.isBlocked = true;
+                response.blockedB64Flag = blocklistFilter.getB64FlagFromUint16(blockedUint, flagVersion);
+            } else {
+                blockedUint = new Uint16Array(domainNameInBlocklistUint);
+                response.blockedB64Flag = blocklistFilter.getB64FlagFromUint16(blockedUint, flagVersion);
+            }
+        }
+    } catch (e) {
+        throw e;
+    }
+    return response;
+}
 class DNSBlock {
     constructor(){
         this.dnsParser = new DNSParserWrap();
+        this.dnsBlockOperation = new DNSBlockOperation();
+        this.wCache = null;
     }
     async RethinkModule(param) {
         let response = {
@@ -4770,92 +4819,53 @@ class DNSBlock {
         response.data = {
         };
         response.data.isBlocked = false;
-        response.data.isNotBlockedExistInBlocklist = false;
-        response.data.domainNameInBlocklistUint;
-        response.data.domainNameUserBlocklistIntersection;
-        response.data.decodedDnsPacket;
         response.data.blockedB64Flag = "";
         try {
-            let decodedDnsPacket = await this.dnsParser.Decode(param.requestBodyBuffer);
-            if (param.userBlocklistInfo.userBlocklistFlagUint.length > 0) {
+            if (param.userBlocklistInfo.userBlocklistFlagUint.length !== "") {
                 let domainNameBlocklistInfo;
-                if (decodedDnsPacket.questions.length >= 1 && (decodedDnsPacket.questions[0].type == "A" || decodedDnsPacket.questions[0].type == "AAAA" || decodedDnsPacket.questions[0].type == "CNAME" || decodedDnsPacket.questions[0].type == "HTTPS" || decodedDnsPacket.questions[0].type == "SVCB")) {
-                    domainNameBlocklistInfo = param.blocklistFilter.getDomainInfo(decodedDnsPacket.questions[0].name);
-                    if (domainNameBlocklistInfo.data.searchResult) {
-                        response.data = checkDomainBlocking(param.userBlocklistInfo, domainNameBlocklistInfo, param.blocklistFilter, decodedDnsPacket.questions[0].name);
+                if (param.requestDecodedDnsPacket.questions.length >= 1 && (param.requestDecodedDnsPacket.questions[0].type == "A" || param.requestDecodedDnsPacket.questions[0].type == "AAAA" || param.requestDecodedDnsPacket.questions[0].type == "CNAME" || param.requestDecodedDnsPacket.questions[0].type == "HTTPS" || param.requestDecodedDnsPacket.questions[0].type == "SVCB")) {
+                    domainNameBlocklistInfo = param.blocklistFilter.getDomainInfo(param.requestDecodedDnsPacket.questions[0].name);
+                    if (domainNameBlocklistInfo.searchResult) {
+                        response.data = this.dnsBlockOperation.checkDomainBlocking(param.userBlocklistInfo.userBlocklistFlagUint, param.userBlocklistInfo.userServiceListUint, param.userBlocklistInfo.flagVersion, domainNameBlocklistInfo.searchResult, param.blocklistFilter, param.requestDecodedDnsPacket.questions[0].name);
+                        if (response.data.isBlocked && param.isAggCacheReq) {
+                            if (this.wCache === null) {
+                                this.wCache = caches.default;
+                            }
+                            toCacheApi(param, this.wCache, domainNameBlocklistInfo);
+                        }
                     }
                 }
             }
-            response.data.decodedDnsPacket = decodedDnsPacket;
         } catch (e) {
             response.isException = true;
             response.exceptionStack = e.stack;
             response.exceptionFrom = "DNSBlock RethinkModule";
-            response.data = false;
             console.error("Error At : DNSBlock -> RethinkModule");
             console.error(e.stack);
         }
         return response;
     }
 }
-function checkDomainBlocking(userBlocklistInfo, domainNameBlocklistInfo, blocklistFilter, domainName) {
-    let response;
-    try {
-        response = checkDomainNameUserFlagIntersection(userBlocklistInfo.userBlocklistFlagUint, userBlocklistInfo.flagVersion, domainNameBlocklistInfo, blocklistFilter, domainName);
-        if (response.isBlocked) {
-            return response;
+function toCacheApi(param, wCache, domainNameBlocklistInfo) {
+    const dn = param.requestDecodedDnsPacket.questions[0].name.trim().toLowerCase() + ":" + param.requestDecodedDnsPacket.questions[0].type;
+    let wCacheUrl = new URL(new URL(param.request.url).origin + "/" + dn);
+    let response = new Response("", {
+        headers: {
+            "x-rethink-metadata": JSON.stringify({
+                ttlEndTime: 0,
+                bodyUsed: false,
+                blocklistInfo: Object.fromEntries(domainNameBlocklistInfo.searchResult)
+            })
+        },
+        cf: {
+            cacheTtl: 604800
         }
-        if (userBlocklistInfo.userServiceListUint) {
-            let dnSplit = domainName.split(".");
-            let dnJoin = "";
-            let wildCardResponse;
-            while(dnSplit.shift() != undefined){
-                dnJoin = dnSplit.join(".");
-                wildCardResponse = checkDomainNameUserFlagIntersection(userBlocklistInfo.userServiceListUint, userBlocklistInfo.flagVersion, domainNameBlocklistInfo, blocklistFilter, dnJoin);
-                if (wildCardResponse.isBlocked) {
-                    return wildCardResponse;
-                }
-            }
-        }
-    } catch (e) {
-        throw e;
-    }
-    return response;
-}
-function checkDomainNameUserFlagIntersection(userBlocklistFlagUint, flagVersion, domainNameBlocklistInfo, blocklistFilter, domainName) {
-    let response = {
-    };
-    try {
-        response.isBlocked = false;
-        response.isNotBlockedExistInBlocklist = false;
-        response.blockedB64Flag = "";
-        response.blockedTag = [];
-        if (domainNameBlocklistInfo.data.searchResult.has(domainName)) {
-            let domainNameInBlocklistUint = domainNameBlocklistInfo.data.searchResult.get(domainName);
-            let blockedUint = blocklistFilter.flagIntersection(userBlocklistFlagUint, domainNameInBlocklistUint);
-            if (blockedUint) {
-                response.isBlocked = true;
-                response.blockedB64Flag = blocklistFilter.getB64FlagFromUint16(blockedUint, flagVersion);
-            } else {
-                response.isNotBlockedExistInBlocklist = true;
-                blockedUint = new Uint16Array(domainNameInBlocklistUint.length);
-                let index = 0;
-                for (let singleBlock of domainNameInBlocklistUint){
-                    blockedUint[index] = singleBlock;
-                    index++;
-                }
-                response.blockedB64Flag = blocklistFilter.getB64FlagFromUint16(blockedUint, flagVersion);
-            }
-            response.blockedTag = blocklistFilter.getTag(blockedUint);
-        }
-    } catch (e) {
-        throw e;
-    }
-    return response;
+    });
+    param.event.waitUntil(wCache.put(wCacheUrl, response));
 }
 class DNSResponseBlock {
     constructor(){
-        this.dnsParser = new DNSParserWrap();
+        this.dnsBlockOperation = new DNSBlockOperation();
     }
     async RethinkModule(param) {
         let response = {
@@ -4866,199 +4876,181 @@ class DNSResponseBlock {
         response.data = {
         };
         response.data.isBlocked = false;
-        response.data.isNotBlockedExistInBlocklist = false;
-        response.data.domainNameInBlocklistUint;
-        response.data.domainNameUserBlocklistIntersection;
+        response.data.blockedB64Flag = "";
         try {
-            if (param.userBlocklistInfo.userBlocklistFlagUint.length > 0) {
+            if (param.userBlocklistInfo.userBlocklistFlagUint !== "") {
                 if (param.responseDecodedDnsPacket.answers.length > 0 && param.responseDecodedDnsPacket.answers[0].type == "CNAME") {
-                    checkCnameBlock(param, response, param.responseDecodedDnsPacket);
+                    checkCnameBlock(param, response, this.dnsBlockOperation);
                 } else if (param.responseDecodedDnsPacket.answers.length > 0 && (param.responseDecodedDnsPacket.answers[0].type == "HTTPS" || param.responseDecodedDnsPacket.answers[0].type == "SVCB")) {
-                    checkHttpsSvcbBlock(param, response, param.responseDecodedDnsPacket);
+                    checkHttpsSvcbBlock(param, response, this.dnsBlockOperation);
                 }
             }
         } catch (e) {
             response.isException = true;
             response.exceptionStack = e.stack;
             response.exceptionFrom = "DNSResponseBlock RethinkModule";
-            response.data = false;
             console.error("Error At : DNSResponseBlock -> RethinkModule");
             console.error(e.stack);
         }
         return response;
     }
 }
-function checkHttpsSvcbBlock(param, response, decodedDnsPacket) {
-    let targetName = decodedDnsPacket.answers[0].data.targetName.trim().toLowerCase();
+function checkHttpsSvcbBlock(param, response, dnsBlockOperation) {
+    let targetName = param.responseDecodedDnsPacket.answers[0].data.targetName.trim().toLowerCase();
     if (targetName != ".") {
-        domainNameBlocklistInfo = param.blocklistFilter.getDomainInfo(targetName);
-        if (domainNameBlocklistInfo.data.searchResult) {
-            response.data = checkDomainBlocking1(param.userBlocklistInfo, domainNameBlocklistInfo, param.blocklistFilter, targetName);
+        let domainNameBlocklistInfo = param.blocklistFilter.getDomainInfo(targetName);
+        if (domainNameBlocklistInfo.searchResult) {
+            response.data = dnsBlockOperation.checkDomainBlocking(param.userBlocklistInfo.userBlocklistFlagUint, param.userBlocklistInfo.userServiceListUint, param.userBlocklistInfo.flagVersion, domainNameBlocklistInfo.searchResult, param.blocklistFilter, targetName);
         }
     }
 }
-function checkCnameBlock(param, response, decodedDnsPacket) {
-    let domainNameBlocklistInfo;
-    let cname = decodedDnsPacket.answers[0].data.trim().toLowerCase();
-    domainNameBlocklistInfo = param.blocklistFilter.getDomainInfo(cname);
-    if (domainNameBlocklistInfo.data.searchResult) {
-        response.data = checkDomainBlocking1(param.userBlocklistInfo, domainNameBlocklistInfo, param.blocklistFilter, cname);
+function checkCnameBlock(param, response, dnsBlockOperation) {
+    let cname = param.responseDecodedDnsPacket.answers[0].data.trim().toLowerCase();
+    let domainNameBlocklistInfo = param.blocklistFilter.getDomainInfo(cname);
+    if (domainNameBlocklistInfo.searchResult) {
+        response.data = dnsBlockOperation.checkDomainBlocking(param.userBlocklistInfo.userBlocklistFlagUint, param.userBlocklistInfo.userServiceListUint, param.userBlocklistInfo.flagVersion, domainNameBlocklistInfo.searchResult, param.blocklistFilter, cname);
     }
     if (!response.data.isBlocked) {
-        cname = decodedDnsPacket.answers[decodedDnsPacket.answers.length - 1].name.trim().toLowerCase();
+        cname = param.responseDecodedDnsPacket.answers[param.responseDecodedDnsPacket.answers.length - 1].name.trim().toLowerCase();
         domainNameBlocklistInfo = param.blocklistFilter.getDomainInfo(cname);
-        if (domainNameBlocklistInfo.data.searchResult) {
-            response.data = checkDomainBlocking1(param.userBlocklistInfo, domainNameBlocklistInfo, param.blocklistFilter, cname);
+        if (domainNameBlocklistInfo.searchResult) {
+            response.data = dnsBlockOperation.checkDomainBlocking(param.userBlocklistInfo.userBlocklistFlagUint, param.userBlocklistInfo.userServiceListUint, param.userBlocklistInfo.flagVersion, domainNameBlocklistInfo.searchResult, param.blocklistFilter, cname);
         }
     }
 }
-function checkDomainBlocking1(userBlocklistInfo, domainNameBlocklistInfo, blocklistFilter, domainName) {
-    let response;
-    try {
-        response = checkDomainNameUserFlagIntersection1(userBlocklistInfo.userBlocklistFlagUint, userBlocklistInfo.flagVersion, domainNameBlocklistInfo, blocklistFilter, domainName);
-        if (response.isBlocked) {
-            return response;
-        }
-        if (userBlocklistInfo.userServiceListUint) {
-            let dnSplit = domainName.split(".");
-            let dnJoin = "";
-            let wildCardResponse;
-            while(dnSplit.shift() != undefined){
-                dnJoin = dnSplit.join(".");
-                wildCardResponse = checkDomainNameUserFlagIntersection1(userBlocklistInfo.userServiceListUint, userBlocklistInfo.flagVersion, domainNameBlocklistInfo, blocklistFilter, dnJoin);
-                if (wildCardResponse.isBlocked) {
-                    return wildCardResponse;
-                }
-            }
-        }
-    } catch (e) {
-        throw e;
+const minlives = 1;
+const maxlives = 2 ** 14;
+const mincap = 2 ** 5;
+const maxcap = 2 ** 32;
+const minslots = 2;
+class Clock {
+    constructor(cap, slotsperhand = 256, maxlife = 16){
+        cap = this.bound(cap, mincap, maxcap);
+        this.capacity = 2 ** Math.round(Math.log2(cap));
+        this.rb = new Array(this.capacity);
+        this.rb.fill(null);
+        this.store = new Map();
+        this.maxcount = this.bound(maxlife, minlives, maxlives);
+        this.totalhands = Math.max(minslots, Math.round(this.capacity / slotsperhand));
+        this.hands = new Array(this.totalhands);
+        for(let i = 0; i < this.totalhands; i++)this.hands[i] = i;
     }
-    return response;
+    next(i) {
+        const n = i + this.totalhands;
+        return (this.capacity + n) % this.capacity;
+    }
+    cur(i) {
+        return (this.capacity + i) % this.capacity;
+    }
+    prev(i) {
+        const p = i - this.totalhands;
+        return (this.capacity + p) % this.capacity;
+    }
+    bound(i, min, max) {
+        i = i < min ? min : i;
+        i = i > max ? max - 1 : i;
+        return i;
+    }
+    head(n) {
+        n = this.bound(n, 0, this.totalhands);
+        const h = this.hands[n];
+        return this.cur(h);
+    }
+    incrHead(n) {
+        n = this.bound(n, 0, this.totalhands);
+        this.hands[n] = this.next(this.hands[n]);
+        return this.hands[n];
+    }
+    decrHead(n) {
+        n = this.bound(n, 0, this.totalhands);
+        this.hands[n] = this.prev(this.hands[n]);
+        return this.hands[n];
+    }
+    get size() {
+        return this.store.size;
+    }
+    evict(n, c) {
+        logd("evict start, head/num/size", this.head(n), n, this.size);
+        const start = this.head(n);
+        let h = start;
+        do {
+            const entry = this.rb[h];
+            if (entry === null) return true;
+            entry.count -= c;
+            if (entry.count <= 0) {
+                logd("evict", h, entry);
+                this.store.delete(entry.key);
+                this.rb[h] = null;
+                return true;
+            }
+            h = this.incrHead(n);
+        }while (h !== start)
+        return false;
+    }
+    put(k, v, c = 1) {
+        const cached = this.store.get(k);
+        if (cached) {
+            cached.value = v;
+            const at = this.rb[cached.pos];
+            at.count = Math.min(at.count + c, this.maxcount);
+            return true;
+        }
+        const num = this.rolldice;
+        this.evict(num, c);
+        const h = this.head(num);
+        const hasSlot = this.rb[h] === null;
+        if (!hasSlot) return false;
+        const ringv = {
+            key: k,
+            count: Math.min(c, this.maxcount)
+        };
+        const storev = {
+            value: v,
+            pos: h
+        };
+        this.rb[h] = ringv;
+        this.store.set(k, storev);
+        this.incrHead(num);
+        return true;
+    }
+    val(k, c = 1) {
+        const r = this.store.get(k);
+        if (!r) return null;
+        const at = this.rb[r.pos];
+        at.count = Math.min(at.count + c, this.maxcount);
+        return r.value;
+    }
+    get rolldice() {
+        const max = this.totalhands;
+        return Math.floor(Math.random() * (max - 0)) + 0;
+    }
 }
-function checkDomainNameUserFlagIntersection1(userBlocklistFlagUint, flagVersion, domainNameBlocklistInfo, blocklistFilter, domainName) {
-    let response = {
-    };
-    try {
-        response.isBlocked = false;
-        response.isNotBlockedExistInBlocklist = false;
-        response.blockedB64Flag = "";
-        response.blockedTag = [];
-        if (domainNameBlocklistInfo.data.searchResult.has(domainName)) {
-            let domainNameInBlocklistUint = domainNameBlocklistInfo.data.searchResult.get(domainName);
-            let blockedUint = blocklistFilter.flagIntersection(userBlocklistFlagUint, domainNameInBlocklistUint);
-            if (blockedUint) {
-                response.isBlocked = true;
-                response.blockedB64Flag = blocklistFilter.getB64FlagFromUint16(blockedUint, flagVersion);
-            } else {
-                response.isNotBlockedExistInBlocklist = true;
-                blockedUint = new Uint16Array(domainNameInBlocklistUint.length);
-                let index = 0;
-                for (let singleBlock of domainNameInBlocklistUint){
-                    blockedUint[index] = singleBlock;
-                    index++;
-                }
-                response.blockedB64Flag = blocklistFilter.getB64FlagFromUint16(blockedUint, flagVersion);
-            }
-            response.blockedTag = blocklistFilter.getTag(blockedUint);
-        }
-    } catch (e) {
-        throw e;
-    }
-    return response;
+function logd() {
 }
 class LfuCache {
-    constructor(lfuName, size){
-        this.lfuName = lfuName;
-        this.lfuCacheMap = new Map();
-        this.lfuCacheArray = [];
-        this.lfuCacheSize = size;
-        this.lfuCacheIndex = -1;
-        this.lfustart = -1;
-        this.lfuend = 0;
+    constructor(id, capacity){
+        this.id = id;
+        this.cache = new Clock(capacity);
     }
     Get(key) {
-        let cacheData = false;
+        let val = false;
         try {
-            cacheData = this.lfuCacheArray[this.lfuCacheMap.get(key)];
+            val = this.cache.val(key) || false;
         } catch (e) {
-            console.log("Error At : LfuCache -> Get");
+            console.log("Error: " + this.id + " -> Get");
             console.log(e.stack);
         }
-        return cacheData;
+        return val;
     }
-    Put(cacheData) {
+    Put(key, val) {
         try {
-            this.dataToLfu(cacheData);
+            this.cache.put(key, val);
         } catch (e) {
-            console.log("Error At : LfuCache -> Put");
+            console.log("Error: " + this.id + " -> Put");
             console.log(e.stack);
         }
     }
 }
-LfuCache.prototype.removeAddLfuCache = function(key, data) {
-    let arraydata = data;
-    arraydata.n = this.lfustart;
-    arraydata.p = -1;
-    this.lfuCacheMap.delete(this.lfuCacheArray[this.lfuend].k);
-    this.lfuCacheArray[this.lfustart].p = this.lfuend;
-    this.lfustart = this.lfuend;
-    this.lfuend = this.lfuCacheArray[this.lfuend].p;
-    this.lfuCacheArray[this.lfuend].n = -1;
-    this.lfuCacheMap.set(key, this.lfustart);
-    this.lfuCacheArray[this.lfustart] = arraydata;
-};
-LfuCache.prototype.updateLfuCache = function(key, data) {
-    let accindex = this.lfuCacheMap.get(key);
-    if (accindex != this.lfustart) {
-        if (data.n == -1) {
-            this.lfuend = data.p;
-            this.lfuCacheArray[this.lfuend].n = -1;
-        } else {
-            this.lfuCacheArray[data.n].p = data.p;
-            this.lfuCacheArray[data.p].n = data.n;
-        }
-        data.p = -1;
-        data.n = this.lfustart;
-        this.lfuCacheArray[this.lfustart].p = accindex;
-        this.lfustart = accindex;
-    }
-};
-LfuCache.prototype.simpleAddLruCache = function(key, data) {
-    let arraydata = {
-    };
-    arraydata = data;
-    if (this.lfuCacheIndex == -1) {
-        arraydata.n = -1;
-        arraydata.p = -1;
-        this.lfustart = 0;
-        this.lfuend = 0;
-        this.lfuCacheIndex++;
-    } else {
-        this.lfuCacheIndex++;
-        arraydata.n = this.lfustart;
-        arraydata.p = -1;
-        this.lfuCacheArray[this.lfustart].p = this.lfuCacheIndex;
-        this.lfustart = this.lfuCacheIndex;
-    }
-    this.lfuCacheMap.set(key, this.lfuCacheIndex);
-    this.lfuCacheArray[this.lfuCacheIndex] = {
-    };
-    this.lfuCacheArray[this.lfuCacheIndex] = arraydata;
-};
-LfuCache.prototype.dataToLfu = function(value) {
-    if (this.lfuCacheMap.has(value.k)) {
-        let oldValue = this.lfuCacheArray[this.lfuCacheMap.get(value.k)];
-        oldValue.data = value.data;
-        this.updateLfuCache(value.k, oldValue);
-    } else {
-        if (this.lfuCacheIndex > this.lfuCacheSize - 2) {
-            this.removeAddLfuCache(value.k, value);
-        } else {
-            this.simpleAddLruCache(value.k, value);
-        }
-    }
-};
 class LocalCache {
     constructor(cacheName, size){
         this.localCache = new LfuCache(cacheName, size);
@@ -5066,13 +5058,12 @@ class LocalCache {
     Get(key) {
         return this.localCache.Get(key);
     }
-    Put(cacheData) {
+    Put(key, data) {
         try {
-            this.localCache.Put(cacheData);
+            this.localCache.Put(key, data);
         } catch (e) {
             console.error("Error At : LocalCache -> Put");
             console.error(e.stack);
-            throw e;
         }
     }
 }
@@ -5101,87 +5092,102 @@ class DNSResolver {
         }
         return response;
     }
-}
-DNSResolver.prototype.checkLocalCacheBfrResolve = async function(param) {
-    let resp = emptyResponse();
-    const dn = (param.requestDecodedDnsPacket.questions.length > 0 ? param.requestDecodedDnsPacket.questions[0].name : "").trim().toLowerCase() + ":" + param.requestDecodedDnsPacket.questions[0].type;
-    const now = Date.now();
-    let cacheRes = this.dnsResCache.Get(dn);
-    if (!cacheRes || now >= cacheRes.data.expiry) {
-        cacheRes = await this.checkSecondLevelCacheBfrResolve(param.runTimeEnv, param.request.url, dn, now);
-        if (!cacheRes) {
-            cacheRes = {
-            };
-            resp.responseBodyBuffer = await (await resolveDnsUpstream(param.request, param.dnsResolverUrl, param.requestBodyBuffer, param.runTimeEnv)).arrayBuffer();
-            await this.updateCache(param, cacheRes, dn, now, resp.responseBodyBuffer);
-            resp.responseDecodedDnsPacket = cacheRes.data.decodedDnsPacket;
-            this.dnsResCache.Put(cacheRes);
-            return resp;
+    async checkLocalCacheBfrResolve(param) {
+        let resp = {
+        };
+        const dn = (param.requestDecodedDnsPacket.questions.length > 0 ? param.requestDecodedDnsPacket.questions[0].name : "").trim().toLowerCase() + ":" + param.requestDecodedDnsPacket.questions[0].type;
+        const now = Date.now();
+        let cacheRes = this.dnsResCache.Get(dn);
+        if (!cacheRes || now >= cacheRes.ttlEndTime) {
+            cacheRes = await this.checkSecondLevelCacheBfrResolve(param.runTimeEnv, param.request.url, dn, now);
+            if (!cacheRes) {
+                cacheRes = {
+                };
+                resp.responseBodyBuffer = await this.resolveDnsUpdateCache(param, cacheRes, dn, now);
+                resp.responseDecodedDnsPacket = cacheRes.decodedDnsPacket;
+                this.dnsResCache.Put(dn, cacheRes);
+                return resp;
+            }
+            this.dnsResCache.Put(dn, cacheRes);
         }
+        resp.responseDecodedDnsPacket = cacheRes.decodedDnsPacket;
+        resp.responseDecodedDnsPacket.id = param.requestDecodedDnsPacket.id;
+        resp.responseBodyBuffer = this.loadDnsResponseFromCache(cacheRes.decodedDnsPacket, cacheRes.ttlEndTime, now);
+        return resp;
     }
-    resp.responseDecodedDnsPacket = cacheRes.data.decodedDnsPacket;
-    resp.responseDecodedDnsPacket.id = param.requestDecodedDnsPacket.id;
-    resp.responseBodyBuffer = await this.loadDnsResponseFromCache(resp.responseDecodedDnsPacket, cacheRes.data.expiry, now);
-    return resp;
-};
-DNSResolver.prototype.loadDnsResponseFromCache = async function(dnsPacket, expiry, now) {
-    const outttl = Math.max(Math.floor((expiry - now) / 1000), 1);
-    for (let answer of dnsPacket.answers){
-        answer.ttl = outttl;
+    loadDnsResponseFromCache(decodedDnsPacket, ttlEndTime, now) {
+        const outttl = Math.max(Math.floor((ttlEndTime - now) / 1000), 1);
+        for (let answer of decodedDnsPacket.answers){
+            answer.ttl = outttl;
+        }
+        return this.dnsParser.Encode(decodedDnsPacket);
     }
-    return this.dnsParser.Encode(dnsPacket);
-};
-DNSResolver.prototype.checkSecondLevelCacheBfrResolve = async function(runTimeEnv, reqUrl, dn, now) {
-    if (runTimeEnv !== "worker") {
-        return false;
-    }
-    let wCacheUrl = new URL(new URL(reqUrl).origin + "/" + dn);
-    let resp = await this.wCache.match(wCacheUrl);
-    if (resp) {
-        const metaData = JSON.parse(resp.headers.get("x-rethink-metadata"));
-        if (now >= cacheRes.data.expiry) {
+    async checkSecondLevelCacheBfrResolve(runTimeEnv, reqUrl, dn, now) {
+        if (runTimeEnv !== "worker") {
             return false;
         }
-        let cacheRes = {
-        };
-        cacheRes.k = dn;
-        cacheRes.data = {
-        };
-        cacheRes.data.decodedDnsPacket = await this.dnsParser.Decode(await resp.arrayBuffer());
-        cacheRes.data.expiry = metaData.expiry;
-        return cacheRes;
-    }
-};
-DNSResolver.prototype.updateCache = async function(param, cacheRes, dn, now, responseBodyBuffer) {
-    let decodedDnsPacket = await this.dnsParser.Decode(responseBodyBuffer);
-    let minttl = 0;
-    for (let answer of decodedDnsPacket.answers){
-        minttl = minttl <= 0 || minttl > answer.ttl ? answer.ttl : minttl;
-    }
-    minttl = Math.max(minttl + ttlGraceSec, 60);
-    cacheRes.k = dn;
-    cacheRes.data = {
-    };
-    cacheRes.data.decodedDnsPacket = decodedDnsPacket;
-    cacheRes.data.expiry = minttl * 1000 + now;
-    if (param.runTimeEnv == "worker") {
-        let wCacheUrl = new URL(new URL(param.request.url).origin + "/" + dn);
-        let response = new Response(responseBodyBuffer, {
-            headers: {
-                "Cache-Control": "s-maxage=" + minttl,
-                "Content-Length": responseBodyBuffer.length,
-                "Content-Type": "application/octet-stream",
-                "x-rethink-metadata": JSON.stringify({
-                    expiry: cacheRes.data.expiry
-                })
-            },
-            cf: {
-                cacheTtl: minttl
+        let wCacheUrl = new URL(new URL(reqUrl).origin + "/" + dn);
+        let resp = await this.wCache.match(wCacheUrl);
+        if (resp) {
+            const metaData = JSON.parse(resp.headers.get("x-rethink-metadata"));
+            if (now >= metaData.ttlEndTime) {
+                return false;
             }
-        });
-        param.event.waitUntil(this.wCache.put(wCacheUrl, response));
+            let cacheRes = {
+            };
+            cacheRes.decodedDnsPacket = this.dnsParser.Decode(await resp.arrayBuffer());
+            cacheRes.ttlEndTime = metaData.ttlEndTime;
+            return cacheRes;
+        }
     }
-};
+    async resolveDnsUpdateCache(param, cacheRes, dn, now) {
+        const upRes = await resolveDnsUpstream(param.request, param.dnsResolverUrl, param.requestBodyBuffer, param.runTimeEnv);
+        if (upRes.status >= 500 && upRes.status < 600) {
+            console.error("Upstream server error =>", upRes.status, upRes.statusText, await upRes.text());
+            throw new Error();
+        }
+        let responseBodyBuffer = await upRes.arrayBuffer();
+        if (!responseBodyBuffer || responseBodyBuffer.byteLength < 12 + 5) throw new Error("Null / inadequate response from upstream");
+        let decodedDnsPacket = (()=>{
+            try {
+                return this.dnsParser.Decode(responseBodyBuffer);
+            } catch (e) {
+                console.error("@DNSResolver->updateCache: Failed decoding response body buffer =>", responseBodyBuffer);
+                throw e;
+            }
+        })();
+        let minttl = 0;
+        for (let answer of decodedDnsPacket.answers){
+            minttl = minttl <= 0 || minttl > answer.ttl ? answer.ttl : minttl;
+        }
+        minttl = Math.max(minttl + ttlGraceSec, 60);
+        cacheRes.decodedDnsPacket = decodedDnsPacket;
+        cacheRes.ttlEndTime = minttl * 1000 + now;
+        if (param.runTimeEnv == "worker") {
+            let wCacheUrl = new URL(new URL(param.request.url).origin + "/" + dn);
+            let response = new Response(responseBodyBuffer, {
+                headers: {
+                    "Cache-Control": "s-maxage=" + minttl,
+                    "Content-Length": responseBodyBuffer.length,
+                    "Content-Type": "application/octet-stream",
+                    "x-rethink-metadata": JSON.stringify({
+                        ttlEndTime: cacheRes.ttlEndTime,
+                        bodyUsed: true,
+                        blocklistInfo: convertMapToObject(param.blocklistFilter.getDomainInfo(decodedDnsPacket.questions.length > 0 ? decodedDnsPacket.questions[0].name : "").searchResult)
+                    })
+                },
+                cf: {
+                    cacheTtl: minttl
+                }
+            });
+            param.event.waitUntil(this.wCache.put(wCacheUrl, response));
+        }
+        return responseBodyBuffer;
+    }
+}
+function convertMapToObject(map) {
+    return map ? Object.fromEntries(map) : false;
+}
 async function resolveDnsUpstream(request, resolverUrl, requestBodyBuffer, runTimeEnv) {
     try {
         let u = new URL(request.url);
@@ -5224,9 +5230,9 @@ function emptyResponse() {
         exceptionStack: "",
         exceptionFrom: "",
         data: {
-        },
-        responseDecodedDnsPacket: null,
-        responseBodyBuffer: null
+            responseDecodedDnsPacket: null,
+            responseBodyBuffer: null
+        }
     };
 }
 function errResponse(e) {
@@ -5234,138 +5240,22 @@ function errResponse(e) {
         isException: true,
         exceptionStack: e.stack,
         exceptionFrom: "DNSResolver RethinkModule",
-        data: false,
-        responseDecodedDnsPacket: null,
-        responseBodyBuffer: null
+        data: false
     };
-}
-class CurrentRequest {
-    constructor(){
-        this.blockedB64Flag = "";
-        this.decodedDnsPacket = undefined;
-        this.httpResponse = undefined;
-        this.isException = false;
-        this.exceptionStack = undefined;
-        this.exceptionFrom = "";
-        this.isDnsParseException = false;
-        this.isDnsBlock = false;
-        this.isInvalidFlagBlock = false;
-        this.stopProcessing = false;
-        this.dnsParser = new DNSParserWrap();
-    }
-    dnsExceptionResponse() {
-        const singleLog = {
-        };
-        singleLog.exceptionFrom = this.exceptionFrom;
-        singleLog.exceptionStack = this.exceptionStack;
-        const dnsEncodeObj = this.dnsParser.Encode({
-            type: "response",
-            flags: 4098
-        });
-        this.httpResponse = new Response(dnsEncodeObj);
-        setResponseCommonHeader.call(this);
-        this.httpResponse.headers.set("x-err", JSON.stringify(singleLog));
-    }
-    customResponse(data) {
-        const dnsEncodeObj = this.dnsParser.Encode({
-            type: "response",
-            flags: 1
-        });
-        this.httpResponse = new Response(dnsEncodeObj);
-        setResponseCommonHeader.call(this);
-        this.httpResponse.headers.set("x-err", JSON.stringify(data));
-    }
-    dnsResponse(arrayBuffer) {
-        this.httpResponse = new Response(arrayBuffer);
-        setResponseCommonHeader.call(this);
-    }
-    dnsBlockResponse() {
-        try {
-            this.decodedDnsPacket.type = "response";
-            this.decodedDnsPacket.rcode = "NOERROR";
-            this.decodedDnsPacket.flags = 384;
-            this.decodedDnsPacket.flag_qr = true;
-            this.decodedDnsPacket.answers = [];
-            this.decodedDnsPacket.answers[0] = {
-            };
-            this.decodedDnsPacket.answers[0].name = this.decodedDnsPacket.questions[0].name;
-            this.decodedDnsPacket.answers[0].type = this.decodedDnsPacket.questions[0].type;
-            this.decodedDnsPacket.answers[0].ttl = 300;
-            this.decodedDnsPacket.answers[0].class = "IN";
-            this.decodedDnsPacket.answers[0].data = "";
-            this.decodedDnsPacket.answers[0].flush = false;
-            if (this.decodedDnsPacket.questions[0].type == "A") {
-                this.decodedDnsPacket.answers[0].data = "0.0.0.0";
-            } else if (this.decodedDnsPacket.questions[0].type == "AAAA") {
-                this.decodedDnsPacket.answers[0].data = "::";
-            } else if (this.decodedDnsPacket.questions[0].type == "HTTPS" || this.decodedDnsPacket.questions[0].type == "SVCB") {
-                this.decodedDnsPacket.answers[0].data = {
-                };
-                this.decodedDnsPacket.answers[0].data.svcPriority = 0;
-                this.decodedDnsPacket.answers[0].data.targetName = ".";
-                this.decodedDnsPacket.answers[0].data.svcParams = {
-                };
-            }
-            this.decodedDnsPacket.authorities = [];
-            this.httpResponse = new Response(this.dnsParser.Encode(this.decodedDnsPacket));
-            setResponseCommonHeader.call(this);
-        } catch (e) {
-            console.error(JSON.stringify(this.decodedDnsPacket));
-            this.isException = true;
-            this.exceptionStack = e.stack;
-            this.exceptionFrom = "CurrentRequest dnsBlockResponse";
-        }
-    }
-}
-function setResponseCommonHeader() {
-    this.httpResponse.headers.set("Content-Type", "application/dns-message");
-    this.httpResponse.headers.append("Vary", "Origin");
-    this.httpResponse.headers.delete("expect-ct");
-    this.httpResponse.headers.delete("cf-ray");
-    if (this.isDnsBlock) {
-        this.httpResponse.headers.set("x-nile-flags", this.blockedB64Flag);
-    } else if (this.blockedB64Flag !== "") {
-        this.httpResponse.headers.set('x-nile-flag-notblocked', this.blockedB64Flag);
-    }
 }
 const BASE64 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_";
 const config1 = {
-    inspect: false,
-    utf16: true,
     useBinarySearch: true,
     debug: false,
     selectsearch: true,
-    fastPos: true,
-    compress: true,
-    unroll: false,
-    useBuffer: true,
-    write16: true,
-    valueNode: true,
-    base32: false,
-    storeMeta: false,
-    allLists: false,
-    fetch: true,
-    fm: false
+    fastPos: true
 };
-if (config1.valueNode) {
-    config1.compress = true;
-}
-if (config1.compress) {
-    config1.unroll = false;
-    config1.utf16 = config1.unroll ? config1.utf16 : true;
-}
-if (config1.write16) {
-    config1.useBuffer = true;
-}
-const W = config1.utf16 ? 16 : config1.utf15 ? 15 : 6;
+const W = 16;
 const bufferView = {
     15: Uint16Array,
     16: Uint16Array,
     6: Uint8Array
 };
-function CHR(ord) {
-    return CHRM(ord, W === 6);
-}
 function CHR16(ord) {
     return CHRM(ord, false);
 }
@@ -5377,9 +5267,6 @@ const ORD = {
 for(let i2 = 0; i2 < BASE64.length; i2++){
     ORD[BASE64[i2]] = i2;
 }
-function DEC(chr) {
-    return DECM(chr, W === 6);
-}
 function DEC16(chr) {
     return DECM(chr, false);
 }
@@ -5387,120 +5274,11 @@ function DECM(chr, b64) {
     return b64 ? ORD[chr] : chr.charCodeAt(0);
 }
 const L1 = 32 * 32;
-const L2 = 32;
-const V1 = 64;
-const MFIELDBITS = 30;
 const TxtEnc = new TextEncoder();
 const TxtDec = new TextDecoder();
 const DELIM = "#";
 const ENC_DELIM = TxtEnc.encode(DELIM);
-function BitWriter() {
-    this.init();
-}
-function getBuffer(size, nofbits) {
-    return new bufferView[nofbits](size);
-}
-BitWriter.prototype = {
-    init: function() {
-        this.bits = [];
-        this.bytes = [];
-        this.bits16 = [];
-        this.top = 0;
-    },
-    write16 (data, numBits) {
-        if (numBits > 16) {
-            console.error("write16 can only writes lsb16 bits, out of range: " + numBits);
-            return;
-        }
-        const n = data;
-        const brim = 16 - this.top % 16;
-        const cur = this.top / 16 | 0;
-        const e = this.bits16[cur] | 0;
-        let remainingBits = 0;
-        let b = n & BitString.MaskTop[16][16 - numBits];
-        if (brim >= numBits) {
-            b = b << brim - numBits;
-        } else {
-            remainingBits = numBits - brim;
-            b = b >>> remainingBits;
-        }
-        b = e | b;
-        this.bits16[cur] = b;
-        if (remainingBits > 0) {
-            b = n & BitString.MaskTop[16][16 - remainingBits];
-            b = b << 16 - remainingBits;
-            this.bits16[cur + 1] = b;
-        }
-        this.top += numBits;
-    },
-    write: function(data, numBits) {
-        if (config1.write16) {
-            while(numBits > 0){
-                const i = (numBits - 1) / 16 | 0;
-                const b = data >>> i * 16;
-                const l = numBits % 16 === 0 ? 16 : numBits % 16;
-                this.write16(b, l);
-                numBits -= l;
-            }
-            return;
-        }
-        for(let i = numBits - 1; i >= 0; i--){
-            if (data & 1 << i) {
-                this.bits.push(1);
-            } else {
-                this.bits.push(0);
-            }
-        }
-    },
-    getData: function() {
-        const conv = this.bitsToBytes();
-        this.bytes = this.bytes.concat(conv);
-        return config1.useBuffer ? conv : this.bytes.join("");
-    },
-    bitsToBytes: function() {
-        if (config1.write16) {
-            if (config1.useBuffer) {
-                return bufferView[W].from(this.bits16);
-            }
-            this.bits16 = [];
-        }
-        const n = this.bits.length;
-        const size = Math.ceil(n / W);
-        const chars = config1.useBuffer ? getBuffer(size, W) : [];
-        console.log("W/size/n ", W, size, n);
-        let j = 0;
-        let b = 0;
-        let i = 0;
-        while(j < n){
-            b = b << 1 | this.bits[j];
-            i += 1;
-            if (i === W) {
-                if (config1.useBuffer) {
-                    chars.set([
-                        b
-                    ], j / W | 0);
-                } else {
-                    chars.push(CHR(b));
-                }
-                i = b = 0;
-            }
-            j += 1;
-        }
-        if (i !== 0) {
-            b = b << W - i;
-            if (config1.useBuffer) {
-                chars.set([
-                    b
-                ], j / W | 0);
-            } else {
-                chars.push(CHR(b));
-            }
-            i = 0;
-        }
-        this.bits = [];
-        return chars;
-    }
-};
+const periodEncVal = TxtEnc.encode(".");
 function BitString(str) {
     this.init(str);
 }
@@ -5523,33 +5301,6 @@ BitString.MaskTop = {
         3,
         1,
         0, 
-    ],
-    15: [
-        32767,
-        16383,
-        8191,
-        4095,
-        2047,
-        1023,
-        511,
-        255,
-        127,
-        63,
-        31,
-        15,
-        7,
-        3,
-        1,
-        0, 
-    ],
-    6: [
-        63,
-        31,
-        15,
-        7,
-        3,
-        1,
-        0
     ]
 };
 BitString.MaskBottom = {
@@ -5613,7 +5364,6 @@ BitString.prototype = {
     init: function(str) {
         this.bytes = str;
         this.length = this.bytes.length * W;
-        this.useBuffer = typeof str !== "string";
     },
     getData: function() {
         return this.bytes;
@@ -5626,48 +5376,29 @@ BitString.prototype = {
         return e;
     },
     get: function(p, n, debug = false) {
-        if (this.useBuffer) {
-            if (p % W + n <= W) {
-                return (this.bytes[p / W | 0] & BitString.MaskTop[W][p % W]) >> W - p % W - n;
-            } else {
-                let result = this.bytes[p / W | 0] & BitString.MaskTop[W][p % W];
-                let tmpCount = 0;
-                const disp1 = this.bytes[p / W | 0];
-                const disp2 = BitString.MaskTop[W][p % W];
-                const res1 = result;
-                const l = W - p % W;
-                p += l;
-                n -= l;
-                while(n >= W){
-                    tmpCount++;
-                    result = result << W | this.bytes[p / W | 0];
-                    p += W;
-                    n -= W;
-                }
-                const res2 = result;
-                if (n > 0) {
-                    result = result << n | this.bytes[p / W | 0] >> W - n;
-                }
-                if (debug == true) {
-                    console.log("disp1: " + disp1 + " disp2: " + disp2 + " loopcount: " + tmpCount + " res1: " + res1 + " res2: " + res2 + " r: " + result);
-                }
-                return result;
-            }
-        }
         if (p % W + n <= W) {
-            return (DEC(this.bytes[p / W | 0]) & BitString.MaskTop[W][p % W]) >> W - p % W - n;
+            return (this.bytes[p / W | 0] & BitString.MaskTop[W][p % W]) >> W - p % W - n;
         } else {
-            let result = DEC(this.bytes[p / W | 0]) & BitString.MaskTop[W][p % W];
+            let result = this.bytes[p / W | 0] & BitString.MaskTop[W][p % W];
+            let tmpCount = 0;
+            const disp1 = this.bytes[p / W | 0];
+            const disp2 = BitString.MaskTop[W][p % W];
+            const res1 = result;
             const l = W - p % W;
             p += l;
             n -= l;
             while(n >= W){
-                result = result << W | DEC(this.bytes[p / W | 0]);
+                tmpCount++;
+                result = result << W | this.bytes[p / W | 0];
                 p += W;
                 n -= W;
             }
+            const res2 = result;
             if (n > 0) {
-                result = result << n | DEC(this.bytes[p / W | 0]) >> W - n;
+                result = result << n | this.bytes[p / W | 0] >> W - n;
+            }
+            if (debug == true) {
+                console.log("disp1: " + disp1 + " disp2: " + disp2 + " loopcount: " + tmpCount + " res1: " + res1 + " res2: " + res2 + " r: " + result);
             }
             return result;
         }
@@ -5719,72 +5450,12 @@ BitString.prototype = {
         return rank;
     }
 };
-function nodeCountFromEncodedDataIfExists(bits, defaultValue) {
-    if (!config1.storeMeta) return defaultValue;
-    return bits.get(bits.length - 30, 30);
+function RankDirectory(directoryData, bitData, numBits, l1Size, l2Size) {
+    this.init(directoryData, bitData, numBits, l1Size, l2Size);
 }
-function RankDirectory(directoryData, bitData, numBits, l1Size, l2Size, valueDirData) {
-    this.init(directoryData, bitData, numBits, l1Size, l2Size, valueDirData);
-}
-RankDirectory.Create = function(data, nodeCount, l1Size, l2Size) {
-    const bits = new BitString(data);
-    let p = 0;
-    let i = 0;
-    let count1 = 0, count2 = 0;
-    nodeCount = nodeCountFromEncodedDataIfExists(bits, nodeCount);
-    const numBits = nodeCount * 2 + 1;
-    const l1bits = Math.ceil(Math.log2(numBits));
-    const l2bits = Math.ceil(Math.log2(l1Size));
-    const bitCount = config1.compress && !config1.unroll ? 7 : 6;
-    const valuesIndex = numBits + bitCount * nodeCount;
-    const directory = new BitWriter();
-    const valueDir = new BitWriter();
-    if (config1.selectsearch === false) {
-        while(p + l2Size <= numBits){
-            count2 += bits.count(p, l2Size);
-            i += l2Size;
-            p += l2Size;
-            if (i === l1Size) {
-                count1 += count2;
-                directory.write(count1, l1bits);
-                count2 = 0;
-                i = 0;
-            } else {
-                directory.write(count2, l2bits);
-            }
-        }
-    } else {
-        let i = 0;
-        while(i + l2Size <= numBits){
-            const sel = bits.pos0(i, l2Size);
-            directory.write(sel, l1bits);
-            i = sel + 1;
-        }
-    }
-    const bitslenindex = Math.ceil(Math.log2(nodeCount));
-    const bitslenpos = Math.ceil(Math.log2(bits.length - valuesIndex));
-    const bitslenvalue = 16;
-    valueDir.write(0, bitslenpos);
-    let j = 1;
-    for(let i1 = valuesIndex, b = valuesIndex; i1 + bitslenindex + bitslenvalue < bits.length;){
-        const currentIndex = bits.get(i1, bitslenindex);
-        const currentValueHeader = bits.get(i1 + bitslenindex, bitslenvalue);
-        const currentValueLength = (countSetBits(currentValueHeader) + 1) * bitslenvalue;
-        const pos = currentIndex / V1 | 0;
-        while(pos != 0 && pos >= j){
-            b = pos === j ? i1 : b;
-            const v = b - valuesIndex;
-            valueDir.write(v, bitslenpos);
-            j += 1;
-        }
-        i1 += currentValueLength + bitslenindex;
-    }
-    return new RankDirectory(directory.getData(), data, numBits, l1Size, l2Size, valueDir.getData());
-};
 RankDirectory.prototype = {
-    init: function(directoryData, trieData, numBits, l1Size, l2Size, valueDir) {
+    init: function(directoryData, trieData, numBits, l1Size, l2Size) {
         this.directory = new BitString(directoryData);
-        if (valueDir) this.valueDir = new BitString(valueDir);
         this.data = new BitString(trieData);
         this.l1Size = l1Size;
         this.l2Size = l2Size;
@@ -5853,56 +5524,17 @@ RankDirectory.prototype = {
         return val;
     }
 };
-function TrieNode(letter) {
-    this.letter = letter;
-    this.final = false;
-    this.children = [];
-    this.compressed = false;
-    this.flag = config1.valueNode ? false : undefined;
-}
-function TrieNode2(letter) {
-    this.letter = letter;
-    this.compressed = false;
-    this.final = false;
-    this.children = undefined;
-    this.flag = undefined;
-}
-function Trie() {
+function Tags(flags) {
     this.init();
+    this.setupFlags(flags);
 }
-Trie.prototype = {
-    init: function() {
-        this.previousWord = "";
-        this.root = new TrieNode([
-            0
-        ]);
-        this.cache = [
-            this.root
-        ];
-        this.nodeCount = 1;
-        this.invoke = 0;
-        this.stats = {
-        };
-        this.inspect = {
-        };
+Tags.prototype = {
+    init: function(flags) {
         this.flags = {
         };
         this.rflags = {
         };
         this.fsize = 0;
-        this.indexBitsArray = [
-            "0"
-        ];
-    },
-    getNodeCount: function() {
-        return this.nodeCount;
-    },
-    getFlagNodeIfExists (children) {
-        if (config1.valueNode && children && children.length > 0) {
-            const flagNode = children[0];
-            if (flagNode.flag === true) return flagNode;
-        }
-        return undefined;
     },
     setupFlags: function(flags) {
         let i = 0;
@@ -5924,7 +5556,7 @@ Trie.prototype = {
             mask = mask >>> 1;
         }
         if (tagIndices.length !== flags.length - 1) {
-            console.log(tagIndices, flags, " flags and header mismatch (bug in upsert?)");
+            console.log(tagIndices, flags, "flags and header mismatch (bug in upsert?)");
             return values;
         }
         for(let i1 = 0; i1 < flags.length; i1++){
@@ -5935,7 +5567,7 @@ Trie.prototype = {
                 if ((flag & mask) === mask) {
                     const pos = index * 16 + j;
                     if (config1.debug) {
-                        console.log("pos ", pos, "index/tagIndices", index, tagIndices, "j/i", j, i1);
+                        console.log("pos", pos, "index/tagIndices", index, tagIndices, "j/i", j, i1);
                     }
                     values.push(this.rflags[pos]);
                 }
@@ -5943,347 +5575,8 @@ Trie.prototype = {
             }
         }
         return values;
-    },
-    upsertFlag: function(node, flag) {
-        let res;
-        let fnode;
-        let val;
-        let newlyAdded = false;
-        if (config1.valueNode === true) {
-            const first = node.children[0];
-            const isNodeFlag = first && first.flag;
-            if (!flag || flag.length === 0) {
-                if (!isNodeFlag) return;
-                node.children = node.children.slice(1);
-                node.flag = false;
-                this.nodeCount -= first.letter.length * 2;
-                return;
-            }
-            flag = TxtDec.decode(flag);
-            val = this.flags[flag];
-            if (typeof val === "undefined") {
-                console.log("val undef ", node);
-                return;
-            }
-            const flagNode = isNodeFlag ? first : new TrieNode(CHR16(0));
-            if (!isNodeFlag) {
-                const all = node.children;
-                node.children = [
-                    flagNode
-                ];
-                node.children.concat(all);
-                newlyAdded = true;
-            }
-            flagNode.flag = true;
-            res = flagNode.letter;
-            fnode = flagNode;
-        } else {
-            if (!flag || flag.length === 0) {
-                this.nodeCount -= node.flag.length * 2;
-                node.flag = undefined;
-                return;
-            }
-            flag = TxtDec.decode(flag);
-            val = this.flags[flag];
-            if (typeof val === "undefined") {
-                return;
-            }
-            if (typeof node.flag === "undefined") {
-                node.flag = CHR16(0);
-                newlyAdded = true;
-            }
-            res = node.flag;
-            fnode = node;
-        }
-        const header = 0;
-        const index = (val / 16 | 0) + 1;
-        const pos = val % 16;
-        const resnodesize = !newlyAdded ? res.length * 2 : 0;
-        let h = DEC16(res[header]);
-        let n = (h >>> 15 - (index - 1) & 1) !== 1 ? 0 : DEC16(res[index]);
-        h |= 1 << 15 - (index - 1);
-        n |= 1 << 15 - pos;
-        res = CHR16(h) + res.slice(1, index) + CHR16(n) + res.slice(index + 1);
-        const newresnodesize = res.length * 2;
-        this.nodeCount = this.nodeCount - resnodesize + newresnodesize;
-        if (config1.valueNode === true) {
-            fnode.letter = res;
-        } else {
-            fnode.flag = res;
-        }
-    },
-    insert: function(word) {
-        const index = word.lastIndexOf(ENC_DELIM[0]);
-        const flag = word.slice(index + 1);
-        word = word.slice(0, index);
-        if (config1.compress === true) {
-            let j = 1;
-            let k = 0;
-            let p = 0;
-            let topped = false;
-            while(p < word.length && j < this.cache.length){
-                const cw = this.cache[j];
-                let l = 0;
-                while(p < word.length && l < cw.letter.length){
-                    if (word[p] !== cw.letter[l]) {
-                        topped = true;
-                        break;
-                    }
-                    p += 1;
-                    l += 1;
-                }
-                k = l > 0 ? l : k;
-                j = l > 0 ? j + 1 : j;
-                if (topped) break;
-            }
-            const w = word.slice(p);
-            const pos = j - 1;
-            const node = this.cache[pos];
-            const letter = node.letter.slice(0, k);
-            if (pos >= 0) {
-                this.cache.splice(pos + 1);
-            }
-            if (letter.length > 0 && letter.length !== node.letter.length) {
-                const split = node.letter.slice(letter.length);
-                const tn = new TrieNode(split);
-                tn.final = node.final;
-                tn.flag = node.flag;
-                tn.children = node.children;
-                node.letter = letter;
-                node.children = [];
-                node.children.push(tn);
-                node.final = false;
-                this.upsertFlag(node, undefined);
-            }
-            if (w.length === 0) {
-                node.final = true;
-                this.upsertFlag(node, flag);
-            } else {
-                if (typeof node === "undefined") {
-                    console.log("second add new-node/in-word/match-letter/parent-node", w, word, letter, searchPos);
-                }
-                const second = new TrieNode(w);
-                second.final = true;
-                this.upsertFlag(second, flag);
-                this.nodeCount += w.length;
-                node.children.push(second);
-                this.cache.push(second);
-            }
-            this.previousWord = word;
-            return;
-        }
-        let commonPrefix = 0;
-        let i = 0;
-        let node;
-        while(i < Math.min(word.length, this.previousWord.length)){
-            if (word[i] !== this.previousWord[i]) break;
-            commonPrefix += 1;
-            i += 1;
-        }
-        this.cache.splice(commonPrefix + 1);
-        node = this.cache[this.cache.length - 1];
-        for(i = commonPrefix; i < word.length; i++){
-            const next = new TrieNode(word[i]);
-            this.nodeCount += 1;
-            node.children.push(next);
-            this.cache.push(next);
-            node = next;
-        }
-        node.final = true;
-        this.upsertFlag(node, flag);
-        this.previousWord = word;
-    },
-    apply: function(fn) {
-        const level = [
-            this.root
-        ];
-        while(level.length > 0){
-            const node = level.shift();
-            for(let i = 0; i < node.children.length; i++){
-                level.push(node.children[i]);
-            }
-            fn(this, node);
-        }
-    },
-    levelorder: function() {
-        const level = [
-            this.root
-        ];
-        let p = 0;
-        let q = 0;
-        const ord = [];
-        const inspect = {
-        };
-        let nbb = 0;
-        for(let n = 0; n < level.length; n++){
-            const node = level[n];
-            if (config1.valueNode && node.flag === true) continue;
-            const childrenLength = node.children ? node.children.length : 0;
-            q += childrenLength;
-            if (n === p) {
-                ord.push(q);
-                p = q;
-            }
-            let start = 0;
-            let flen = 0;
-            const flagNode = this.getFlagNodeIfExists(node.children);
-            if (flagNode) {
-                start = 1;
-                if (typeof flagNode.letter === "undefined" || typeof flagNode === "undefined") {
-                    console.log("flagnode letter undef ", flagNode, " node ", node);
-                }
-                const encValue = new BitString(flagNode.letter).encode(8);
-                flen = encValue.length;
-                for(let i = 0; i < encValue.length; i++){
-                    const l = encValue[i];
-                    const aux = new TrieNode2([
-                        l
-                    ]);
-                    aux.flag = true;
-                    level.push(aux);
-                }
-                nbb += 1;
-            }
-            for(let i = start; i < childrenLength; i++){
-                const current = node.children[i];
-                inspect[current.letter.length] = (inspect[current.letter.length + flen] | 0) + 1;
-                for(let j = 0; j < current.letter.length - 1; j++){
-                    const l = current.letter[j];
-                    const aux = new TrieNode2([
-                        l
-                    ]);
-                    aux.compressed = true;
-                    level.push(aux);
-                }
-                level.push(current);
-            }
-        }
-        console.log(inspect);
-        return {
-            level: level,
-            div: ord
-        };
-    },
-    indexBits: function(index) {
-        if (index > 0 && !this.indexBitsArray[index]) {
-            this.indexBitsArray[index] = new String().padStart(index, "1") + "0";
-        }
-        return this.indexBitsArray[index];
-    },
-    encode: function() {
-        const finalMask = 256;
-        const compressedMask = 512;
-        const flagMask = 768;
-        this.invoke += 1;
-        const bits = new BitWriter();
-        const chars = [];
-        const vals = [];
-        const indices = [];
-        bits.write(2, 2);
-        this.stats = {
-            children: 0,
-            single: new Array(256).fill(0)
-        };
-        let start = new Date().getTime();
-        const levelorder = this.levelorder();
-        const level = levelorder.level;
-        levelorder.div;
-        let nbb = 0;
-        console.log("levlen", level.length, "nodecount", this.nodeCount, " masks ", compressedMask, flagMask, finalMask);
-        const l10 = level.length / 10 | 0;
-        for(let i = 0; i < level.length; i++){
-            const node = level[i];
-            const childrenLength = node.children ? node.children.length : 0;
-            const size = config1.compress && !config1.unroll ? childrenSize(node) : childrenLength;
-            nbb += size;
-            if (i % l10 == 0) console.log("at encode[i]: " + i);
-            this.stats.single[childrenLength] += 1;
-            for(let j = 0; j < size; j++){
-                bits.write(1, 1);
-            }
-            bits.write(0, 1);
-            if (config1.compress && !config1.unroll) {
-                const letter = node.letter[node.letter.length - 1];
-                let value = letter;
-                if (node.final) {
-                    value |= finalMask;
-                    this.stats.children += 1;
-                    if (!config1.valueNode) {
-                        vals.push(node.flag);
-                        indices.push(i);
-                    }
-                }
-                if (node.compressed) {
-                    value |= compressedMask;
-                }
-                if (config1.valueNode && node.flag === true) {
-                    value |= flagMask;
-                }
-                chars.push(value);
-            } else {
-                const letter = node.letter[0];
-                let value = letter;
-                if (node.final) {
-                    value |= finalMask;
-                    this.stats.children += 1;
-                    if (!config1.valueNode) {
-                        vals.push(node.flag);
-                        indices.push(i);
-                    }
-                }
-                chars.push(value);
-            }
-        }
-        const elapsed2 = new Date().getTime() - start;
-        start = new Date().getTime();
-        const extraBit = config1.compress && !config1.unroll ? 1 : 0;
-        const bitslen = extraBit + 9;
-        console.log("charslen: " + chars.length + ", bitslen: " + bitslen, " letterstart", bits.top);
-        let k = 0;
-        for (const c of chars){
-            if (k % (chars.length / 10 | 0) == 0) console.log("charslen: " + k);
-            bits.write(c, bitslen);
-            k += 1;
-        }
-        const elapsed = new Date().getTime() - start;
-        console.log(this.invoke + " csize: " + nbb + " elapsed write.keys: " + elapsed2 + " elapsed write.values: " + elapsed + " stats: f: " + this.stats.children + ", c:" + this.stats.single);
-        if (config1.valueNode === false) {
-            const bitslenindex = Math.ceil(Math.log2(t.getNodeCount()));
-            const bitslenvalue = 16;
-            for(let i = 0; i < vals.length; i++){
-                const index = indices[i];
-                const value = vals[i];
-                bits.write(index, bitslenindex);
-                for (const v of value){
-                    bits.write(DEC16(v), bitslenvalue);
-                }
-            }
-        }
-        if (config1.storeMeta) {
-            console.log("metadata-start ", bits.top);
-            bits.write(this.nodeCount, MFIELDBITS);
-        }
-        return bits.getData();
     }
 };
-function childrenSize(tn) {
-    let size = 0;
-    if (!tn.children) return size;
-    if (config1.valueNode === true) {
-        for (const c of tn.children){
-            let len = c.letter.length;
-            if (c.flag) {
-                len = len * 2;
-            }
-            size += len;
-        }
-        return size;
-    }
-    for (const c of tn.children){
-        size += c.letter.length;
-    }
-    return size;
-}
 function FrozenTrieNode(trie, index) {
     this.trie = trie;
     this.index = index;
@@ -6302,13 +5595,13 @@ function FrozenTrieNode(trie, index) {
     };
     this.compressed = ()=>{
         if (typeof comCached === "undefined") {
-            comCached = (config1.compress && !config1.unroll ? this.trie.data.get(this.trie.letterStart + index * this.trie.bitslen, 1) : 0) === 1;
+            comCached = this.trie.data.get(this.trie.letterStart + index * this.trie.bitslen, 1) === 1;
         }
         return comCached;
     };
     this.flag = ()=>{
         if (typeof flagCached === "undefined") {
-            flagCached = config1.valueNode ? this.compressed() && this.final() : false;
+            flagCached = this.compressed() && this.final();
         }
         return flagCached;
     };
@@ -6329,7 +5622,7 @@ function FrozenTrieNode(trie, index) {
     };
     this.childCount = ()=>this.childOfNextNode() - this.firstChild()
     ;
-    this.value = config1.valueNode ? ()=>{
+    this.value = ()=>{
         if (typeof valCached === "undefined") {
             const value = [];
             let i = 0;
@@ -6356,40 +5649,6 @@ function FrozenTrieNode(trie, index) {
             valCached = value;
         }
         return valCached;
-    } : ()=>{
-        if (typeof valCached === "undefined") {
-            const vdir = this.trie.directory.valueDir;
-            const data = this.trie.data;
-            const start = this.trie.valuesStart;
-            const end = data.length;
-            const vdirlen = this.trie.valuesDirBitsLength;
-            const vindexlen = this.trie.valuesIndexLength;
-            const vlen = 16;
-            const p = (this.index / V1 | 0) * vdirlen;
-            const bottomIndex = start + vdir.get(p, vdirlen);
-            for(let i = bottomIndex; i < end;){
-                const currentIndex = data.get(i, vindexlen);
-                const vheader = data.get(i + vindexlen, vlen);
-                const vcount = countSetBits(vheader);
-                if (currentIndex === this.index) {
-                    const vflag = [];
-                    vflag.push(vheader);
-                    for(let k = 1; k <= vcount; k++){
-                        const f = data.get(i + vindexlen + k * vlen, vlen);
-                        vflag.push(f);
-                    }
-                    valCached = vflag;
-                    break;
-                } else if (currentIndex > this.index) {
-                    valCached = -1;
-                    break;
-                } else if (currentIndex < this.index) {
-                    const vhop = (vcount + 1) * vlen;
-                    i += vhop + vindexlen;
-                }
-            }
-        }
-        return valCached;
     };
 }
 FrozenTrieNode.prototype = {
@@ -6407,13 +5666,9 @@ FrozenTrie.prototype = {
     init: function(trieData, rdir, nodeCount) {
         this.data = new BitString(trieData);
         this.directory = rdir;
-        nodeCount = nodeCountFromEncodedDataIfExists(this.data, nodeCount);
-        this.extraBit = config1.compress && !config1.unroll ? 1 : 0;
+        this.extraBit = 1;
         this.bitslen = 9 + this.extraBit;
         this.letterStart = nodeCount * 2 + 1;
-        this.valuesStart = this.letterStart + nodeCount * this.bitslen;
-        this.valuesIndexLength = Math.ceil(Math.log2(nodeCount));
-        this.valuesDirBitsLength = Math.ceil(Math.log2(this.data.length - this.valuesStart));
     },
     getNodeByIndex: function(index) {
         return new FrozenTrieNode(this, index);
@@ -6427,7 +5682,6 @@ FrozenTrie.prototype = {
         const debug = config1.debug;
         let node = this.getRoot();
         let child;
-        const periodEncVal = TxtEnc.encode(".");
         let returnValue = false;
         for(let i = 0; i < word.length; i++){
             let isFlag = -1;
@@ -6469,7 +5723,7 @@ FrozenTrie.prototype = {
                     if (debug) console.log("j: " + j + " c: " + node.getChildCount());
                     return returnValue;
                 }
-            } else if (config1.compress === true && !config1.unroll) {
+            } else {
                 let high = node.getChildCount();
                 let low = isFlag;
                 while(high - low > 1){
@@ -6558,30 +5812,6 @@ FrozenTrie.prototype = {
                         return returnValue;
                     }
                 }
-            } else {
-                let high = node.getChildCount();
-                let low = -1;
-                while(high - low > 1){
-                    const probe = (high + low) / 2 | 0;
-                    child = node.getChild(probe);
-                    if (debug) {
-                        console.log("it: " + probe + " tl: " + child.letter() + " wl: " + word[i]);
-                    }
-                    if (child.letter() === word[i]) {
-                        if (debug) console.log("it: " + probe + " break ");
-                        break;
-                    } else if (word[i] > child.letter()) {
-                        low = probe;
-                    } else {
-                        high = probe;
-                    }
-                }
-                if (high - low <= 1) {
-                    if (debug) {
-                        console.log("h-low: " + (high - low) + " c: " + node.getChildCount());
-                    }
-                    return returnValue;
-                }
             }
             if (debug) console.log("        next: " + child.letter());
             node = child;
@@ -6611,30 +5841,28 @@ function customTagToFlag(fl, blocklistFileTag) {
     }
     return res;
 }
-let tag, fl;
-function createBlocklistFilter(tdBuffer, rdBuffer, blocklistFileTag, blocklistBasicConfig) {
+function createBlocklistFilter(tdbuf, rdbuf, blocklistFileTag, blocklistBasicConfig) {
+    initialize();
     try {
-        tag = {
+        let tag = {
         };
-        fl = [];
+        let fl = [];
         for(const fileuname in blocklistFileTag){
             if (!blocklistFileTag.hasOwnProperty(fileuname)) continue;
             fl[blocklistFileTag[fileuname].value] = fileuname;
             const v = DELIM + blocklistFileTag[fileuname].uname;
             tag[fileuname] = v.split("").reverse().join("");
         }
-        initialize();
-        const t = new Trie();
-        t.setupFlags(fl);
-        const td = new bufferView[W](tdBuffer);
-        let rd = new bufferView[W](rdBuffer);
-        rd = new RankDirectory(rd, td, blocklistBasicConfig.nodecount * 2 + 1, L1, L2, null);
-        const ft = new FrozenTrie(td, rd, blocklistBasicConfig.nodecount);
-        config1.useBuffer = true;
-        config1.valueNode = true;
+        const tags = new Tags(fl);
+        const tdv = new bufferView[16](tdbuf);
+        const rdv = new bufferView[16](rdbuf);
+        const nc = blocklistBasicConfig.nodecount;
+        const numbits = blocklistBasicConfig.nodecount * 2 + 1;
+        const rd = new RankDirectory(rdv, tdv, numbits, L1, 32);
+        const frozentrie = new FrozenTrie(tdv, rd, nc);
         return {
-            t: t,
-            ft: ft
+            t: tags,
+            ft: frozentrie
         };
     } catch (e) {
         throw e;
@@ -6667,19 +5895,29 @@ function rbase32(input) {
     return output;
 }
 class BlocklistFilter {
-    constructor(t, ft, blocklistBasicConfig, blocklistFileTag){
+    constructor(){
+        this.t = null;
+        this.ft = null;
+        this.blocklistBasicConfig = null;
+        this.blocklistFileTag = null;
+        this.domainNameCache = null;
+        this.wildCardUint = new Uint16Array([
+            64544,
+            18431,
+            8191,
+            65535,
+            64640,
+            1,
+            128,
+            16320, 
+        ]);
+    }
+    loadFilter(t, ft, blocklistBasicConfig, blocklistFileTag) {
         this.t = t;
         this.ft = ft;
         this.blocklistBasicConfig = blocklistBasicConfig;
         this.blocklistFileTag = blocklistFileTag;
         this.domainNameCache = new LocalCache("Domain-Name-Cache", 5000);
-        this.wildCardLists = new Set();
-        setWildcardlist.call(this);
-        const str = customTagToFlag(this.wildCardLists, this.blocklistFileTag);
-        this.wildCardUint = new Uint16Array(str.length);
-        for(let i = 0; i < this.wildCardUint.length; i++){
-            this.wildCardUint[i] = str.charCodeAt(i);
-        }
     }
     getDomainInfo(domainName) {
         domainName = domainName.trim().toLowerCase();
@@ -6687,12 +5925,9 @@ class BlocklistFilter {
         if (!domainNameInfo) {
             domainNameInfo = {
             };
-            domainNameInfo.k = domainName;
-            domainNameInfo.data = {
-            };
-            domainNameInfo.data.searchResult = this.hadDomainName(domainName);
+            domainNameInfo.searchResult = this.hadDomainName(domainName);
+            this.domainNameCache.Put(domainName, domainNameInfo);
         }
-        this.domainNameCache.Put(domainNameInfo);
         return domainNameInfo;
     }
     hadDomainName(domainName) {
@@ -6869,72 +6104,12 @@ function decodeFromBinary(b, u8) {
 function decodeFromBinaryArray(b) {
     return decodeFromBinary(b, true);
 }
-function setWildcardlist() {
-    this.wildCardLists.add("KBI");
-    this.wildCardLists.add("YWG");
-    this.wildCardLists.add("SMQ");
-    this.wildCardLists.add("AQX");
-    this.wildCardLists.add("BTG");
-    this.wildCardLists.add("GUN");
-    this.wildCardLists.add("KSH");
-    this.wildCardLists.add("WAS");
-    this.wildCardLists.add("AZY");
-    this.wildCardLists.add("GWB");
-    this.wildCardLists.add("YMG");
-    this.wildCardLists.add("CZM");
-    this.wildCardLists.add("ZVO");
-    this.wildCardLists.add("YOM");
-    this.wildCardLists.add("THR");
-    this.wildCardLists.add("RPW");
-    this.wildCardLists.add("AMG");
-    this.wildCardLists.add("WTJ");
-    this.wildCardLists.add("ZXU");
-    this.wildCardLists.add("FJG");
-    this.wildCardLists.add("NYS");
-    this.wildCardLists.add("OKG");
-    this.wildCardLists.add("KNP");
-    this.wildCardLists.add("FLI");
-    this.wildCardLists.add("RYX");
-    this.wildCardLists.add("CIH");
-    this.wildCardLists.add("PTE");
-    this.wildCardLists.add("KEA");
-    this.wildCardLists.add("CMR");
-    this.wildCardLists.add("DDO");
-    this.wildCardLists.add("VLM");
-    this.wildCardLists.add("JEH");
-    this.wildCardLists.add("XLX");
-    this.wildCardLists.add("OQW");
-    this.wildCardLists.add("FXC");
-    this.wildCardLists.add("HZJ");
-    this.wildCardLists.add("SWK");
-    this.wildCardLists.add("VAM");
-    this.wildCardLists.add("AOS");
-    this.wildCardLists.add("FAL");
-    this.wildCardLists.add("CZK");
-    this.wildCardLists.add("FZB");
-    this.wildCardLists.add("PYW");
-    this.wildCardLists.add("JXA");
-    this.wildCardLists.add("KOR");
-    this.wildCardLists.add("DEP");
-    this.wildCardLists.add("RFX");
-    this.wildCardLists.add("RAF");
-    this.wildCardLists.add("RKG");
-    this.wildCardLists.add("GLV");
-    this.wildCardLists.add("FHW");
-    this.wildCardLists.add("AGZ");
-    this.wildCardLists.add("IVN");
-    this.wildCardLists.add("FIB");
-    this.wildCardLists.add("FGF");
-    this.wildCardLists.add("FLL");
-    this.wildCardLists.add("IVO");
-    this.wildCardLists.add("ALQ");
-}
+let debug = false;
 class BlocklistWrapper {
     constructor(){
-        this.blocklistFilter = null;
+        this.blocklistFilter = new BlocklistFilter();
         this.startTime;
         this.isBlocklistUnderConstruction = false;
-        this.isException = false;
         this.exceptionFrom = "";
         this.exceptionStack = "";
     }
@@ -6946,36 +6121,30 @@ class BlocklistWrapper {
         response.exceptionFrom = "";
         response.data = {
         };
+        if (this.blocklistFilter.t !== null) {
+            response.data.blocklistFilter = this.blocklistFilter;
+            return response;
+        }
         try {
-            let now = Date.now();
-            if (this.blocklistFilter == null && this.isBlocklistUnderConstruction == false) {
-                this.isBlocklistUnderConstruction = true;
-                this.startTime = Date.now();
-                return await this.initBlocklistConstruction(param.blocklistUrl, param.latestTimestamp, param.tdNodecount, param.tdParts);
-            } else if (this.blocklistFilter == null && this.isBlocklistUnderConstruction == true && now - this.startTime > param.workerTimeout) {
-                this.startTime = Date.now();
-                this.isException = false;
-                return await this.initBlocklistConstruction(param.blocklistUrl, param.latestTimestamp, param.tdNodecount, param.tdParts);
+            const now = Date.now();
+            if (this.isBlocklistUnderConstruction === false) {
+                return await this.initBlocklistConstruction(now, param.blocklistUrl, param.latestTimestamp, param.tdNodecount, param.tdParts);
+            } else if (now - this.startTime > param.workerTimeout * 2) {
+                return await this.initBlocklistConstruction(now, param.blocklistUrl, param.latestTimestamp, param.tdNodecount, param.tdParts);
             } else {
-                let retryCount = 0;
-                while(this.isBlocklistUnderConstruction == true && this.isException == false){
-                    if (retryCount >= 14) {
-                        break;
+                let totalWaitms = 0;
+                const waitms = 50;
+                while(totalWaitms < param.fetchTimeout){
+                    if (this.blocklistFilter.t !== null) {
+                        response.data.blocklistFilter = this.blocklistFilter;
+                        return response;
                     }
                     await sleep(50);
-                    retryCount++;
+                    totalWaitms += waitms;
                 }
-                if (this.blocklistFilter != null) {
-                    response.data.blocklistFilter = this.blocklistFilter;
-                } else if (this.isException == true) {
-                    response.isException = true;
-                    response.exceptionStack = this.exceptionStack;
-                    response.exceptionFrom = this.exceptionFrom;
-                } else {
-                    response.isException = true;
-                    response.exceptionStack = "Problem in loading blocklistFilter - Waiting Timeout";
-                    response.exceptionFrom = "blocklistWrapper.js RethinkModule";
-                }
+                response.isException = true;
+                response.exceptionStack = this.exceptionStack ? this.exceptionStack : "Problem in loading blocklistFilter - Waiting Timeout";
+                response.exceptionFrom = this.exceptionFrom ? this.exceptionFrom : "blocklistWrapper.js RethinkModule";
             }
         } catch (e) {
             response.isException = true;
@@ -6986,7 +6155,9 @@ class BlocklistWrapper {
         }
         return response;
     }
-    async initBlocklistConstruction(blocklistUrl, latestTimestamp, tdNodecount, tdParts) {
+    async initBlocklistConstruction(when, blocklistUrl, latestTimestamp, tdNodecount, tdParts) {
+        this.isBlocklistUnderConstruction = true;
+        this.startTime = when;
         let response = {
         };
         response.isException = false;
@@ -6995,18 +6166,23 @@ class BlocklistWrapper {
         response.data = {
         };
         try {
-            let resp = await downloadBuildBlocklist(blocklistUrl, latestTimestamp, tdNodecount, tdParts);
-            this.blocklistFilter = new BlocklistFilter(resp.t, resp.ft, resp.blocklistBasicConfig, resp.blocklistFileTag);
+            let bl = await downloadBuildBlocklist(blocklistUrl, latestTimestamp, tdNodecount, tdParts);
+            this.blocklistFilter.loadFilter(bl.t, bl.ft, bl.blocklistBasicConfig, bl.blocklistFileTag);
+            if (debug) {
+                console.log("done blocklist filter");
+                let result = this.blocklistFilter.getDomainInfo("google.com");
+                console.log(JSON.stringify(result));
+                console.log(JSON.stringify(result.searchResult.get("google.com")));
+            }
             this.isBlocklistUnderConstruction = false;
             response.data.blocklistFilter = this.blocklistFilter;
         } catch (e) {
+            this.isBlocklistUnderConstruction = false;
             response.isException = true;
             response.exceptionStack = e.stack;
             response.exceptionFrom = "blocklistWrapper.js initBlocklistConstruction";
-            this.isException = true;
             this.exceptionFrom = response.exceptionFrom;
             this.exceptionStack = response.exceptionStack;
-            console.error("Error At -> BlocklistWrapper initBlocklistConstruction");
             console.error(e.stack);
         }
         return response;
@@ -7030,6 +6206,10 @@ async function downloadBuildBlocklist(blocklistUrl, latestTimestamp, tdNodecount
             buf1,
             buf2
         ]);
+        if (debug) {
+            console.log("call createBlocklistFilter");
+            console.log(blocklistBasicConfig);
+        }
         let trie = createBlocklistFilter(downloads[1], downloads[2], downloads[0], blocklistBasicConfig);
         resp.t = trie.t;
         resp.ft = trie.ft;
@@ -7040,18 +6220,32 @@ async function downloadBuildBlocklist(blocklistUrl, latestTimestamp, tdNodecount
         throw e;
     }
 }
-async function fileFetch(url, type) {
+async function fileFetch(url, typ) {
+    if (typ !== "buffer" && typ !== "json") {
+        throw new Error("Unknown conversion type at fileFetch");
+    }
+    if (debug) {
+        console.log("Start Downloading : " + url);
+    }
     const res = await fetch(url, {
         cf: {
             cacheTtl: 1209600
         }
     });
-    if (type == "buffer") {
-        return await res.arrayBuffer();
-    } else if (type == "json") {
-        return await res.json();
+    if (res.status == 200) {
+        if (typ == "buffer") {
+            return await res.arrayBuffer();
+        } else if (typ == "json") {
+            return await res.json();
+        }
+    } else {
+        console.error(url, res);
+        throw new Error(JSON.stringify([
+            url,
+            res,
+            "response status unsuccessful at fileFetch"
+        ]));
     }
-    throw "Unknown conversion type at fileFetch";
 }
 const sleep = (ms)=>{
     return new Promise((resolve)=>{
@@ -7059,6 +6253,9 @@ const sleep = (ms)=>{
     });
 };
 async function makeTd(baseurl, n) {
+    if (debug) {
+        console.log("Make Td Starts : Tdparts -> " + n);
+    }
     if (n <= -1) {
         return fileFetch(baseurl + "/td.txt", "buffer");
     }
@@ -7071,6 +6268,9 @@ async function makeTd(baseurl, n) {
         tdpromises.push(fileFetch(f, "buffer"));
     }
     const tds = await Promise.all(tdpromises);
+    if (debug) {
+        console.log("all td download successful");
+    }
     return new Promise((resolve, reject)=>{
         resolve(concat(tds));
     });
@@ -7088,11 +6288,193 @@ function concat(arraybuffers) {
     }
     return buf;
 }
+let debug1 = false;
+class DNSAggCache {
+    constructor(){
+        this.dnsParser = new DNSParserWrap();
+        this.dnsBlockOperation = new DNSBlockOperation();
+        this.blocklistFilter = new BlocklistFilter();
+        this.wCache = null;
+    }
+    async RethinkModule(param) {
+        let response = {
+        };
+        response.isException = false;
+        response.exceptionStack = "";
+        response.exceptionFrom = "";
+        response.data = null;
+        try {
+            if (!param.isDnsMsg) {
+                return response;
+            }
+            response.data = await this.aggCache(param);
+        } catch (e) {
+            response.isException = true;
+            response.exceptionStack = e.stack;
+            response.exceptionFrom = "DNSAggCache RethinkModule";
+            console.error("Error At : DNSAggCache -> RethinkModule");
+            console.error(e.stack);
+        }
+        return response;
+    }
+    async aggCache(param) {
+        let response = {
+        };
+        response.reqDecodedDnsPacket = this.dnsParser.Decode(param.requestBodyBuffer);
+        response.aggCacheResponse = {
+        };
+        response.aggCacheResponse.type = "none";
+        if (param.isAggCacheReq && this.wCache === null) {
+            this.wCache = caches.default;
+        }
+        if (param.isAggCacheReq) {
+            const dn = (response.reqDecodedDnsPacket.questions.length > 0 ? response.reqDecodedDnsPacket.questions[0].name : "").trim().toLowerCase() + ":" + response.reqDecodedDnsPacket.questions[0].type;
+            let cacheResponse = await getCacheapi(this.wCache, param.request.url, dn);
+            if (debug1) {
+                console.log("Cache Api Response");
+                console.log(cacheResponse);
+            }
+            if (cacheResponse) {
+                response.aggCacheResponse = await parseCacheapiResponse(cacheResponse, this.dnsParser, this.dnsBlockOperation, this.blocklistFilter, param.userBlocklistInfo, response.reqDecodedDnsPacket);
+            }
+        }
+        return response;
+    }
+}
+async function parseCacheapiResponse(cacheResponse, dnsParser, dnsBlockOperation, blocklistFilter, userBlocklistInfo, reqDecodedDnsPacket) {
+    let response = {
+    };
+    response.type = "none";
+    response.data = {
+    };
+    let metaData = JSON.parse(cacheResponse.headers.get("x-rethink-metadata"));
+    if (debug1) {
+        console.log("Response Found at CacheApi");
+        console.log(JSON.stringify(metaData));
+    }
+    if ((reqDecodedDnsPacket.questions[0].type == "A" || reqDecodedDnsPacket.questions[0].type == "AAAA" || reqDecodedDnsPacket.questions[0].type == "CNAME" || reqDecodedDnsPacket.questions[0].type == "HTTPS" || reqDecodedDnsPacket.questions[0].type == "SVCB") && metaData.blocklistInfo && userBlocklistInfo.userBlocklistFlagUint !== "") {
+        metaData.blocklistInfo = new Map(Object.entries(metaData.blocklistInfo));
+        let blockResponse = dnsBlockOperation.checkDomainBlocking(userBlocklistInfo.userBlocklistFlagUint, userBlocklistInfo.userServiceListUint, userBlocklistInfo.flagVersion, metaData.blocklistInfo, blocklistFilter, reqDecodedDnsPacket.questions[0].name.trim().toLowerCase());
+        if (blockResponse.isBlocked) {
+            response.type = "blocked";
+            response.data = blockResponse;
+            return response;
+        }
+    }
+    if (metaData.bodyUsed) {
+        const now = Date.now();
+        if (now <= metaData.ttlEndTime) {
+            response.type = "response";
+            response.data.decodedDnsPacket = dnsParser.Decode(await cacheResponse.arrayBuffer());
+            const outttl = Math.max(Math.floor((metaData.ttlEndTime - now) / 1000), 1);
+            for (let answer of response.data.decodedDnsPacket.answers){
+                answer.ttl = outttl;
+            }
+            response.data.bodyBuffer = dnsParser.Encode(response.data.decodedDnsPacket);
+        }
+    }
+    return response;
+}
+async function getCacheapi(wCache, reqUrl, key) {
+    let wCacheUrl = new URL(new URL(reqUrl).origin + "/" + key);
+    return await wCache.match(wCacheUrl);
+}
+class CurrentRequest {
+    constructor(){
+        this.blockedB64Flag = "";
+        this.decodedDnsPacket = undefined;
+        this.httpResponse = undefined;
+        this.isException = false;
+        this.exceptionStack = undefined;
+        this.exceptionFrom = "";
+        this.isDnsParseException = false;
+        this.isDnsBlock = false;
+        this.isInvalidFlagBlock = false;
+        this.stopProcessing = false;
+        this.dnsParser = new DNSParserWrap();
+    }
+    dnsExceptionResponse() {
+        const singleLog = {
+        };
+        singleLog.exceptionFrom = this.exceptionFrom;
+        singleLog.exceptionStack = this.exceptionStack;
+        const dnsEncodeObj = this.dnsParser.Encode({
+            type: "response",
+            flags: 4098
+        });
+        this.httpResponse = new Response(dnsEncodeObj);
+        setResponseCommonHeader.call(this);
+        this.httpResponse.headers.set("x-err", JSON.stringify(singleLog));
+    }
+    customResponse(data) {
+        const dnsEncodeObj = this.dnsParser.Encode({
+            type: "response",
+            flags: 1
+        });
+        this.httpResponse = new Response(dnsEncodeObj);
+        setResponseCommonHeader.call(this);
+        this.httpResponse.headers.set("x-err", JSON.stringify(data));
+    }
+    dnsResponse(arrayBuffer) {
+        this.httpResponse = new Response(arrayBuffer);
+        setResponseCommonHeader.call(this);
+    }
+    dnsBlockResponse() {
+        try {
+            this.decodedDnsPacket.type = "response";
+            this.decodedDnsPacket.rcode = "NOERROR";
+            this.decodedDnsPacket.flags = 384;
+            this.decodedDnsPacket.flag_qr = true;
+            this.decodedDnsPacket.answers = [];
+            this.decodedDnsPacket.answers[0] = {
+            };
+            this.decodedDnsPacket.answers[0].name = this.decodedDnsPacket.questions[0].name;
+            this.decodedDnsPacket.answers[0].type = this.decodedDnsPacket.questions[0].type;
+            this.decodedDnsPacket.answers[0].ttl = 300;
+            this.decodedDnsPacket.answers[0].class = "IN";
+            this.decodedDnsPacket.answers[0].data = "";
+            this.decodedDnsPacket.answers[0].flush = false;
+            if (this.decodedDnsPacket.questions[0].type == "A") {
+                this.decodedDnsPacket.answers[0].data = "0.0.0.0";
+            } else if (this.decodedDnsPacket.questions[0].type == "AAAA") {
+                this.decodedDnsPacket.answers[0].data = "::";
+            } else if (this.decodedDnsPacket.questions[0].type == "HTTPS" || this.decodedDnsPacket.questions[0].type == "SVCB") {
+                this.decodedDnsPacket.answers[0].data = {
+                };
+                this.decodedDnsPacket.answers[0].data.svcPriority = 0;
+                this.decodedDnsPacket.answers[0].data.targetName = ".";
+                this.decodedDnsPacket.answers[0].data.svcParams = {
+                };
+            }
+            this.decodedDnsPacket.authorities = [];
+            this.httpResponse = new Response(this.dnsParser.Encode(this.decodedDnsPacket));
+            setResponseCommonHeader.call(this);
+        } catch (e) {
+            console.error(JSON.stringify(this.decodedDnsPacket));
+            this.isException = true;
+            this.exceptionStack = e.stack;
+            this.exceptionFrom = "CurrentRequest dnsBlockResponse";
+        }
+    }
+}
+function setResponseCommonHeader() {
+    this.httpResponse.headers.set("Content-Type", "application/dns-message");
+    this.httpResponse.headers.append("Vary", "Origin");
+    this.httpResponse.headers.delete("expect-ct");
+    this.httpResponse.headers.delete("cf-ray");
+    if (this.isDnsBlock) {
+        this.httpResponse.headers.set("x-nile-flags", this.blockedB64Flag);
+    } else if (this.blockedB64Flag !== "") {
+        this.httpResponse.headers.set('x-nile-flag-notblocked', this.blockedB64Flag);
+    }
+}
+let debug2 = false;
 class CommandControl {
     constructor(){
         this.latestTimestamp = "";
     }
     async RethinkModule(param) {
+        if (debug2) console.log("In CommandControl");
         this.latestTimestamp = param.latestTimestamp;
         let response = {
         };
@@ -7103,23 +6485,11 @@ class CommandControl {
         };
         response.data.stopProcessing = false;
         if (param.request.method === "GET") {
-            response = this.commandOperation(param.request.url, param.blocklistFilter, param.request.headers);
-        } else if (param.request.method === "POST") {
-            let headers = param.request.headers;
-            response.data.stopProcessing = true;
-            const isPOSTDnsMsg = headers.get("Accept") == "application/dns-message" || headers.get("Content-Type") == "application/dns-message";
-            if (isPOSTDnsMsg) {
-                response.data.stopProcessing = false;
-            } else {
-                response.data.httpResponse = new Response(null, {
-                    status: 400,
-                    statusText: "Bad Request"
-                });
-            }
+            response = this.commandOperation(param.request.url, param.blocklistFilter, param.isDnsMsg);
         }
         return response;
     }
-    commandOperation(url, blocklistFilter, headers) {
+    commandOperation(url, blocklistFilter, isDnsMsg) {
         let response = {
         };
         response.isException = false;
@@ -7127,7 +6497,6 @@ class CommandControl {
         response.exceptionFrom = "";
         response.data = {
         };
-        const isGETDnsMsg = headers.get("Accept") == "application/dns-message";
         try {
             response.data.stopProcessing = true;
             response.data.httpResponse;
@@ -7141,20 +6510,20 @@ class CommandControl {
             }
             const weburl = command == "" ? "https://rethinkdns.com/configure" : "https://rethinkdns.com/configure?s=added#" + command;
             if (command == "listtob64") {
-                response.data.httpResponse = listToB64.call(this, queryString, blocklistFilter);
+                response.data.httpResponse = listToB64(queryString, blocklistFilter);
             } else if (command == "b64tolist") {
-                response.data.httpResponse = b64ToList.call(this, queryString, blocklistFilter);
+                response.data.httpResponse = b64ToList(queryString, blocklistFilter);
             } else if (command == "dntolist") {
-                response.data.httpResponse = domainNameToList.call(this, queryString, blocklistFilter);
+                response.data.httpResponse = domainNameToList(queryString, blocklistFilter, this.latestTimestamp);
             } else if (command == "dntouint") {
-                response.data.httpResponse = domainNameToUint.call(this, queryString, blocklistFilter);
+                response.data.httpResponse = domainNameToUint(queryString, blocklistFilter);
             } else if (command == "config" || command == "configure") {
                 let b64UserFlag = "";
                 if (pathSplit.length >= 3) {
                     b64UserFlag = pathSplit[2];
                 }
-                response.data.httpResponse = configRedirect.call(this, b64UserFlag, reqUrl.origin);
-            } else if (!isGETDnsMsg) {
+                response.data.httpResponse = configRedirect(b64UserFlag, reqUrl.origin, this.latestTimestamp);
+            } else if (!isDnsMsg) {
                 response.data.httpResponse = Response.redirect(weburl, 302);
             } else if (queryString.has("dns")) {
                 response.data.stopProcessing = false;
@@ -7174,17 +6543,17 @@ class CommandControl {
         return response;
     }
 }
-function configRedirect(b64UserFlag, requestUrlOrigin) {
+function configRedirect(b64UserFlag, requestUrlOrigin, latestTimestamp) {
     let base = "https://rethinkdns.com/configure";
-    let query = "?v=ext&u=" + requestUrlOrigin + "&tstamp=" + this.latestTimestamp + "#" + b64UserFlag;
+    let query = "?v=ext&u=" + requestUrlOrigin + "&tstamp=" + latestTimestamp + "#" + b64UserFlag;
     return Response.redirect(base + query, 302);
 }
-function domainNameToList(queryString, blocklistFilter) {
+function domainNameToList(queryString, blocklistFilter, latestTimestamp) {
     let domainName = queryString.get("dn") || "";
     let returndata = {
     };
     returndata.domainName = domainName;
-    returndata.version = this.latestTimestamp;
+    returndata.version = latestTimestamp;
     returndata.list = {
     };
     var searchResult = blocklistFilter.hadDomainName(domainName);
@@ -7264,60 +6633,65 @@ function b64ToList(queryString, blocklistFilter) {
 class UserOperation {
     constructor(){
         this.userConfigCache = false;
+        this.blocklistFilter = new BlocklistFilter();
     }
     async RethinkModule(param) {
-        return loadUser.call(this, param);
+        return this.loadUser(param);
     }
-}
-function loadUser(param) {
-    let response = {
-    };
-    response.isException = false;
-    response.exceptionStack = "";
-    response.exceptionFrom = "";
-    response.data = {
-    };
-    try {
-        if (!this.userConfigCache) {
-            this.userConfigCache = new LocalCache("User-Config-Cache", 1000);
-        }
-        let userBlocklistInfo = {
+    loadUser(param) {
+        let response = {
         };
-        userBlocklistInfo.from = "Cache";
-        let blocklistFlag = getBlocklistFlag(param.request.url);
-        let currentUser = this.userConfigCache.Get(blocklistFlag);
-        if (!currentUser) {
-            currentUser = {
-            };
-            currentUser.k = blocklistFlag;
-            currentUser.data = {
-            };
-            currentUser.data.userBlocklistFlagUint = "";
-            currentUser.data.flagVersion = 0;
-            currentUser.data.userServiceListUint = false;
-            let response = param.blocklistFilter.unstamp(blocklistFlag);
-            currentUser.data.userBlocklistFlagUint = response.userBlocklistFlagUint;
-            currentUser.data.flagVersion = response.flagVersion;
-            if (currentUser.data.userBlocklistFlagUint.length > 0) {
-                currentUser.data.userServiceListUint = param.blocklistFilter.flagIntersection(currentUser.data.userBlocklistFlagUint, param.blocklistFilter.wildCardUint);
+        response.isException = false;
+        response.exceptionStack = "";
+        response.exceptionFrom = "";
+        response.data = {
+        };
+        response.data.userBlocklistInfo = {
+        };
+        response.data.userBlocklistInfo.dnsResolverUrl = "";
+        try {
+            if (!param.isDnsMsg) {
+                return response;
             }
-            userBlocklistInfo.from = "Generated";
+            if (!this.userConfigCache) {
+                this.userConfigCache = new LocalCache("User-Config-Cache", 1000);
+            }
+            let userBlocklistInfo = {
+            };
+            userBlocklistInfo.from = "Cache";
+            let blocklistFlag = getBlocklistFlag(param.request.url);
+            let currentUser = this.userConfigCache.Get(blocklistFlag);
+            if (!currentUser) {
+                currentUser = {
+                };
+                currentUser.userBlocklistFlagUint = "";
+                currentUser.flagVersion = 0;
+                currentUser.userServiceListUint = false;
+                let response = this.blocklistFilter.unstamp(blocklistFlag);
+                currentUser.userBlocklistFlagUint = response.userBlocklistFlagUint;
+                currentUser.flagVersion = response.flagVersion;
+                if (currentUser.userBlocklistFlagUint !== "") {
+                    currentUser.userServiceListUint = this.blocklistFilter.flagIntersection(currentUser.userBlocklistFlagUint, this.blocklistFilter.wildCardUint);
+                } else {
+                    blocklistFlag = "";
+                }
+                userBlocklistInfo.from = "Generated";
+                this.userConfigCache.Put(blocklistFlag, currentUser);
+            }
+            userBlocklistInfo.userBlocklistFlagUint = currentUser.userBlocklistFlagUint;
+            userBlocklistInfo.flagVersion = currentUser.flagVersion;
+            userBlocklistInfo.userServiceListUint = currentUser.userServiceListUint;
+            response.data.userBlocklistInfo = userBlocklistInfo;
+            response.data.dnsResolverUrl = param.dnsResolverUrl;
+        } catch (e) {
+            response.isException = true;
+            response.exceptionStack = e.stack;
+            response.exceptionFrom = "UserOperation loadUser";
+            console.error("Error At : UserOperation -> loadUser");
+            console.error(e.stack);
         }
-        userBlocklistInfo.userBlocklistFlagUint = currentUser.data.userBlocklistFlagUint;
-        userBlocklistInfo.flagVersion = currentUser.data.flagVersion;
-        userBlocklistInfo.userServiceListUint = currentUser.data.userServiceListUint;
-        userBlocklistInfo.dnsResolverUrl = param.dnsResolverUrl;
-        response.data = userBlocklistInfo;
-        this.userConfigCache.Put(currentUser);
-    } catch (e) {
-        response.isException = true;
-        response.exceptionStack = e.stack;
-        response.exceptionFrom = "UserOperation loadUser";
-        response.data = false;
-        console.error("Error At : UserOperation -> loadUser");
-        console.error(e.stack);
+        return response;
     }
-    return response;
 }
 function getBlocklistFlag(url) {
     let blocklistFlag = "";
