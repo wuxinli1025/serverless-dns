@@ -6379,18 +6379,33 @@ async function getCacheapi(wCache, reqUrl, key) {
     let wCacheUrl = new URL(new URL(reqUrl).origin + "/" + key);
     return await wCache.match(wCacheUrl);
 }
-const warn = true || true;
-const info = warn || true;
-const gen = info || true;
-const debug2 = g || false;
+let debug2 = false;
+let timer = debug2 || false;
+let gen = debug2 || true;
+let info = gen || true;
+let warn = info || true;
+let err = warn || true;
 function e1() {
-    if (true) console.error(...arguments);
-}
-function g() {
-    if (gen) console.log(...arguments);
+    if (err) console.error(...arguments);
 }
 function d() {
     if (debug2) console.debug(...arguments);
+}
+function laptime(name) {
+    if (timer) console.timeLog(name);
+}
+function starttime(name) {
+    if (timer) {
+        name += id();
+        console.time(name);
+    }
+    return name;
+}
+function endtime(name) {
+    if (timer) console.timeEnd(name);
+}
+function id() {
+    return (Math.random() + 1).toString(36).slice(1);
 }
 class CurrentRequest {
     constructor(){
@@ -6793,16 +6808,18 @@ class RethinkPlugin {
             continueOnStopProcess: continueOnStopProcess
         });
     }
-    async executePlugin(currentRequest) {
-        for (const singlePlugin of this.plugin){
-            if (currentRequest.stopProcessing && !singlePlugin.continueOnStopProcess) {
+    async executePlugin(req) {
+        for (const p of this.plugin){
+            if (req.stopProcessing && !p.continueOnStopProcess) {
                 continue;
             }
-            d(singlePlugin.name);
-            const response = await singlePlugin.module.RethinkModule(generateParam(this.parameter, singlePlugin.param));
-            if (singlePlugin.callBack) {
-                await singlePlugin.callBack.call(this, response, currentRequest);
+            const t = starttime(p.name);
+            const res = await p.module.RethinkModule(generateParam(this.parameter, p.param));
+            laptime(t, "response");
+            if (p.callBack) {
+                await p.callBack.call(this, res, req);
             }
+            endtime(t);
         }
     }
 }
