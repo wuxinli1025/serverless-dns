@@ -105,8 +105,8 @@ try {
         export: true
     });
     Deno.env.set("RUNTIME_ENV", "deno");
-} catch (e) {
-    console.error(".env file may not be loaded => ", e.name, ":", e.message);
+} catch (e2) {
+    console.error(".env file may not be loaded => ", e2.name, ":", e2.message);
 }
 "use strict";
 function toString(type) {
@@ -6379,6 +6379,19 @@ async function getCacheapi(wCache, reqUrl, key) {
     let wCacheUrl = new URL(new URL(reqUrl).origin + "/" + key);
     return await wCache.match(wCacheUrl);
 }
+const warn = true || true;
+const info = warn || true;
+const gen = info || true;
+const debug2 = g || false;
+function e1() {
+    if (true) console.error(...arguments);
+}
+function g() {
+    if (gen) console.log(...arguments);
+}
+function d() {
+    if (debug2) console.debug(...arguments);
+}
 class CurrentRequest {
     constructor(){
         this.blockedB64Flag = "";
@@ -6450,7 +6463,7 @@ class CurrentRequest {
             this.httpResponse = new Response(this.dnsParser.Encode(this.decodedDnsPacket));
             setResponseCommonHeader.call(this);
         } catch (e) {
-            console.error(JSON.stringify(this.decodedDnsPacket));
+            e1(JSON.stringify(this.decodedDnsPacket));
             this.isException = true;
             this.exceptionStack = e.stack;
             this.exceptionFrom = "CurrentRequest dnsBlockResponse";
@@ -6468,13 +6481,13 @@ function setResponseCommonHeader() {
         this.httpResponse.headers.set('x-nile-flag-notblocked', this.blockedB64Flag);
     }
 }
-let debug2 = false;
+let debug3 = false;
 class CommandControl {
     constructor(){
         this.latestTimestamp = "";
     }
     async RethinkModule(param) {
-        if (debug2) console.log("In CommandControl");
+        if (debug3) console.log("In CommandControl");
         this.latestTimestamp = param.latestTimestamp;
         let response = {
         };
@@ -6785,6 +6798,7 @@ class RethinkPlugin {
             if (currentRequest.stopProcessing && !singlePlugin.continueOnStopProcess) {
                 continue;
             }
+            d(singlePlugin.name);
             const response = await singlePlugin.module.RethinkModule(generateParam(this.parameter, singlePlugin.param));
             if (singlePlugin.callBack) {
                 await singlePlugin.callBack.call(this, response, currentRequest);
@@ -6793,6 +6807,7 @@ class RethinkPlugin {
     }
 }
 function blocklistFilterCallBack(response, currentRequest) {
+    d("In blocklistFilterCallBack");
     if (response.isException) {
         loadException(response, currentRequest);
     } else {
@@ -6800,12 +6815,14 @@ function blocklistFilterCallBack(response, currentRequest) {
     }
 }
 async function commandControlCallBack(response, currentRequest) {
+    d("In commandControlCallBack", JSON.stringify(response.data));
     if (response.data.stopProcessing) {
         currentRequest.httpResponse = response.data.httpResponse;
         currentRequest.stopProcessing = true;
     }
 }
 async function userOperationCallBack(response, currentRequest) {
+    d("In userOperationCallBack", JSON.stringify(response.data));
     if (response.isException) {
         loadException(response, currentRequest);
     } else if (!this.parameter.get("isDnsMsg") && this.parameter.get("request").method === "POST") {
@@ -6821,6 +6838,7 @@ async function userOperationCallBack(response, currentRequest) {
     }
 }
 function dnsAggCacheCallBack(response, currentRequest) {
+    d("In dnsAggCacheCallBack", JSON.stringify(response.data));
     if (response.isException) {
         loadException(response, currentRequest);
     } else if (response.data !== null) {
@@ -6841,6 +6859,7 @@ function dnsAggCacheCallBack(response, currentRequest) {
     }
 }
 function dnsBlockCallBack(response, currentRequest) {
+    d("In dnsBlockCallBack", JSON.stringify(response.data));
     if (response.isException) {
         loadException(response, currentRequest);
     } else {
@@ -6853,6 +6872,7 @@ function dnsBlockCallBack(response, currentRequest) {
     }
 }
 function dnsResolverCallBack(response, currentRequest) {
+    d("In dnsResolverCallBack", JSON.stringify(response.data));
     if (response.isException) {
         loadException(response, currentRequest);
     } else {
@@ -6862,6 +6882,7 @@ function dnsResolverCallBack(response, currentRequest) {
     }
 }
 function dnsResponseBlockCallBack(response, currentRequest) {
+    d("In dnsCnameBlockCallBack", JSON.stringify(response.data));
     if (response.isException) {
         loadException(response, currentRequest);
     } else {
@@ -6877,7 +6898,7 @@ function dnsResponseBlockCallBack(response, currentRequest) {
     }
 }
 function loadException(response, currentRequest) {
-    console.error(JSON.stringify(response));
+    e1(JSON.stringify(response));
     currentRequest.stopProcessing = true;
     currentRequest.isException = true;
     currentRequest.exceptionStack = response.exceptionStack;
@@ -6972,81 +6993,92 @@ class Env {
         this.env.set(key, value);
     }
 }
+function fromBrowser(req) {
+    if (!req || !req.headers) return false;
+    const ua = req.headers.get("User-Agent");
+    return ua && ua.startsWith("Mozilla/5.0");
+}
+function jsonHeaders(res) {
+    res.headers.set("Content-Type", "application/json");
+}
+function dnsHeaders(res) {
+    res.headers.set("Content-Type", "application/dns-message");
+}
+function corsHeaders(res) {
+    res.headers.set("Access-Control-Allow-Origin", "*");
+    res.headers.set("Access-Control-Allow-Headers", "*");
+}
+function browserHeaders(res) {
+    jsonHeaders(res);
+    corsHeaders(res);
+}
+function dohHeaders(req, res) {
+    dnsHeaders(res);
+    if (fromBrowser(req)) corsHeaders(res);
+}
+const dns = new DNSParserWrap();
+const servfail = dns.Encode({
+    type: "response",
+    flags: 4098
+});
 const env = new Env();
-const corsHeaders = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "*"
-};
 if (typeof addEventListener !== "undefined") {
     addEventListener("fetch", (event)=>{
         if (!env.isLoaded) {
             env.loadEnv();
         }
-        let workerTimeout = env.get("workerTimeout");
-        if (env.get("runTimeEnv") == "worker" && workerTimeout > 0) {
-            let dnsParser = new DNSParserWrap();
-            let returnResponse = Promise.race([
-                new Promise((resolve, _)=>{
-                    let resp = handleRequest(event);
-                    resolve(resp);
-                }),
-                new Promise((resolve, _)=>{
-                    let resp = new Response(dnsParser.Encode({
-                        type: "response",
-                        flags: 4098
-                    }), {
-                        headers: {
-                            ...corsHeaders,
-                            "Content-Type": "application/dns-message"
-                        }
-                    });
-                    setTimeout(()=>{
-                        resolve(resp);
-                    }, workerTimeout);
-                }), 
-            ]);
-            return event.respondWith(returnResponse);
-        } else {
-            event.respondWith(handleRequest(event));
-        }
+        event.respondWith(handleRequest(event));
     });
 }
 function handleRequest(event) {
-    return proxyRequest(event);
+    const processingTimeout = env.get("workerTimeout");
+    const respectTimeout = env.get("runTimeEnv") == "worker" && processingTimeout > 0;
+    if (!respectTimeout) return proxyRequest(event);
+    return Promise.race([
+        new Promise((resolve, _)=>{
+            resolve(proxyRequest(event));
+        }),
+        new Promise((resolve, _)=>{
+            setTimeout(()=>{
+                resolve(servfail1(event));
+            }, processingTimeout);
+        }), 
+    ]);
 }
 async function proxyRequest(event) {
-    const currentRequest = new CurrentRequest();
-    let res;
     try {
         if (event.request.method === "OPTIONS") {
-            res = new Response(null, {
-                status: 204,
-                headers: corsHeaders
+            const res = new Response(null, {
+                status: 204
             });
+            corsHeaders(res);
             return res;
         }
         if (!env.isLoaded) {
             env.loadEnv();
         }
+        const currentRequest = new CurrentRequest();
         const plugin = new RethinkPlugin(event, env);
         await plugin.executePlugin(currentRequest);
-        const UA = event.request.headers.get("User-Agent");
-        if (UA && UA.startsWith("Mozilla/5.0")) {
-            currentRequest.httpResponse.headers.set("Access-Control-Allow-Origin", "*");
-            currentRequest.httpResponse.headers.set("Access-Control-Allow-Headers", "*");
-        }
+        dohHeaders(event.request, currentRequest.httpResponse);
         return currentRequest.httpResponse;
-    } catch (e) {
-        console.error(e.stack);
-        res = new Response(JSON.stringify(e.stack));
-        res.headers.set("Content-Type", "application/json");
-        res.headers.set("Access-Control-Allow-Origin", "*");
-        res.headers.set("Access-Control-Allow-Headers", "*");
-        res.headers.append("Vary", "Origin");
-        res.headers.delete("expect-ct");
-        res.headers.delete("cf-ray");
+    } catch (err) {
+        e1(err.stack);
+        return errorOrServfail(event, err);
+    }
+}
+function errorOrServfail(event, err) {
+    if (fromBrowser(event)) {
+        const res = new Response(JSON.stringify(e.stack));
+        browserHeaders(res);
         return res;
     }
+    return servfail1(event);
+}
+function servfail1(event) {
+    const res = new Response(servfail);
+    dohHeaders(event.request, res);
+    return res;
 }
 const { TERMINATE_TLS , TLS_CRT_PATH , TLS_KEY_PATH  } = Deno.env.toObject();
 const l = TERMINATE_TLS == "true" ? Deno.listenTls({
