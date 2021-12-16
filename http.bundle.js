@@ -6786,6 +6786,7 @@ class RethinkPlugin {
             "request",
             "dnsResolverUrl",
             "runTimeEnv",
+            "cloudPlatform",
             "requestDecodedDnsPacket",
             "event",
             "blocklistFilter", 
@@ -6962,6 +6963,7 @@ class Env {
     loadEnv() {
         try {
             this.env.set("runTimeEnv", RUNTIME_ENV);
+            this.env.set("cloudPlatform", CLOUD_PLATFORM);
             this.env.set("blocklistUrl", CF_BLOCKLIST_URL);
             this.env.set("latestTimestamp", CF_LATEST_BLOCKLIST_TIMESTAMP);
             this.env.set("dnsResolverUrl", CF_DNS_RESOLVER_URL);
