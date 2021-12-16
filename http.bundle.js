@@ -5067,6 +5067,7 @@ class LocalCache {
         }
     }
 }
+const flydns6 = "fdaa::3";
 const ttlGraceSec = 30;
 const lfuSize = 2000;
 class DNSResolver {
@@ -5115,8 +5116,8 @@ class DNSResolver {
         resp.responseBodyBuffer = this.loadDnsResponseFromCache(cacheRes.decodedDnsPacket, cacheRes.ttlEndTime, now);
         return resp;
     }
-    loadDnsResponseFromCache(decodedDnsPacket, ttlEndTime, now) {
-        const outttl = Math.max(Math.floor((ttlEndTime - now) / 1000), 1);
+    loadDnsResponseFromCache(decodedDnsPacket, end, now) {
+        const outttl = Math.max(Math.floor((end - now) / 1000), 1);
         for (let answer of decodedDnsPacket.answers){
             answer.ttl = outttl;
         }
@@ -5141,18 +5142,20 @@ class DNSResolver {
         }
     }
     async resolveDnsUpdateCache(param, cacheRes, dn, now) {
-        const upRes = await resolveDnsUpstream(param.request, param.dnsResolverUrl, param.requestBodyBuffer, param.runTimeEnv);
-        if (upRes.status >= 500 && upRes.status < 600) {
-            console.error("Upstream server error =>", upRes.status, upRes.statusText, await upRes.text());
-            throw new Error();
+        const upRes = await resolveDnsUpstream(param.request, param.dnsResolverUrl, param.requestBodyBuffer, param.runTimeEnv, param.cloudPlatform);
+        if (!upRes.ok) {
+            console.error("!OK", upRes.status, upRes.statusText, await upRes.text());
+            throw new Error(upRes.status + " http err: " + upRes.statusText);
         }
         let responseBodyBuffer = await upRes.arrayBuffer();
-        if (!responseBodyBuffer || responseBodyBuffer.byteLength < 12 + 5) throw new Error("Null / inadequate response from upstream");
+        if (!responseBodyBuffer || responseBodyBuffer.byteLength < 12 + 5) {
+            throw new Error("Null / inadequate response from upstream");
+        }
         let decodedDnsPacket = (()=>{
             try {
                 return this.dnsParser.Decode(responseBodyBuffer);
             } catch (e) {
-                console.error("@DNSResolver->updateCache: Failed decoding response body buffer =>", responseBodyBuffer);
+                console.error("decode fail", upRes.status, "cached:", responseBodyBuffer);
                 throw e;
             }
         })();
@@ -5188,7 +5191,7 @@ class DNSResolver {
 function convertMapToObject(map) {
     return map ? Object.fromEntries(map) : false;
 }
-async function resolveDnsUpstream(request, resolverUrl, requestBodyBuffer, runTimeEnv) {
+async function resolveDnsUpstream(request, resolverUrl, requestBodyBuffer, runTimeEnv, cloudPlatform) {
     try {
         let u = new URL(request.url);
         let dnsResolverUrl = new URL(resolverUrl);
@@ -5199,9 +5202,12 @@ async function resolveDnsUpstream(request, resolverUrl, requestBodyBuffer, runTi
         const headers = {
             Accept: "application/dns-message"
         };
+        if (cloudPlatform === "fly") {
+            return await plaindns(requestBodyBuffer);
+        }
         let newRequest;
         if (request.method === "GET" || runTimeEnv == "worker" && request.method === "POST") {
-            u.search = runTimeEnv == "worker" && request.method === "POST" ? "?dns=" + btoa(String.fromCharCode(...new Uint8Array(requestBodyBuffer))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "") : u.search;
+            u.search = "?dns=" + dnsqurl(requestBodyBuffer);
             newRequest = new Request(u.href, {
                 method: "GET",
                 headers: headers
@@ -5242,6 +5248,42 @@ function errResponse(e) {
         exceptionFrom: "DNSResolver RethinkModule",
         data: false
     };
+}
+async function plaindns(q) {
+    const Buffer = (await import("buffer")).Buffer;
+    const bq = Buffer.from(q);
+    const udp = await import("dgram");
+    function lookup(resolve, reject) {
+        const client = udp.createSocket("udp6");
+        client.on("message", (b, addrinfo)=>{
+            const res = new Response(arrayBufferOf(b));
+            resolve(res);
+        });
+        client.on("error", (err)=>{
+            if (err) {
+                console.error("plaindns recv fail", err);
+                reject(err.message);
+            }
+        });
+        client.send(bq, 53, flydns6, (err)=>{
+            if (err) {
+                console.error("plaindns send fail", err);
+                reject(err.message);
+            }
+        });
+    }
+    return new Promise(lookup);
+}
+function dnsqurl(dnsq) {
+    return btoa(String.fromCharCode(...new Uint8Array(dnsq))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+}
+function arrayBufferOf(buf) {
+    const ab = new ArrayBuffer(buf.length);
+    const view = new Uint8Array(ab);
+    for(let i = 0; i < buf.length; i++){
+        view[i] = buf[i];
+    }
+    return ab;
 }
 const BASE64 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_";
 const config1 = {
