@@ -6391,8 +6391,8 @@ function e1() {
 function d() {
     if (debug2) console.debug(...arguments);
 }
-function laptime(name) {
-    if (timer) console.timeLog(name);
+function laptime() {
+    if (timer) console.timeLog(...arguments);
 }
 function starttime(name) {
     if (timer) {
@@ -6809,18 +6809,20 @@ class RethinkPlugin {
         });
     }
     async executePlugin(req) {
+        const t = starttime("exec-plugin");
         for (const p of this.plugin){
             if (req.stopProcessing && !p.continueOnStopProcess) {
                 continue;
             }
-            const t = starttime(p.name);
+            laptime(t, p.name, "send-req");
             const res = await p.module.RethinkModule(generateParam(this.parameter, p.param));
-            laptime(t, "response");
+            laptime(t, p.name, "got-res");
             if (p.callBack) {
                 await p.callBack.call(this, res, req);
             }
-            endtime(t);
+            laptime(t, p.name, "post-callback");
         }
+        endtime(t);
     }
 }
 function blocklistFilterCallBack(response, currentRequest) {
