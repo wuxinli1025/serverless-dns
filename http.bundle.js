@@ -6784,8 +6784,8 @@ const dnsResolver = new DNSResolver();
 const dnsResponseBlock = new DNSResponseBlock();
 const dnsAggCache = new DNSAggCache();
 class RethinkPlugin {
-    constructor(event, env){
-        this.parameter = new Map(env.getEnvMap());
+    constructor(event){
+        this.parameter = new Map(envMap);
         this.registerParameter("request", event.request);
         this.registerParameter("event", event);
         this.registerParameter("isDnsMsg", event.request.headers.get("Accept") == "application/dns-message" || event.request.headers.get("Content-Type") == "application/dns-message");
@@ -6997,7 +6997,7 @@ function base64ToArrayBuffer(base64) {
     }
     return bytes.buffer;
 }
-class Env {
+class EnvManager {
     constructor(){
         this.env = new Map();
         this.isLoaded = false;
@@ -7021,6 +7021,7 @@ class Env {
                 typeof Deno !== "undefined" ? this.loadEnvDeno() : this.loadEnvNode();
             } else throw e;
         }
+        globalThis.env = Object.fromEntries(this.env);
     }
     loadEnvDeno() {
         this.env.set("runTimeEnv", Deno.env.get("RUNTIME_ENV"));
@@ -7048,7 +7049,7 @@ class Env {
         this.env.set("isAggCacheReq", false);
         this.isLoaded = true;
     }
-    getEnvMap() {
+    getMap() {
         return this.env;
     }
     get(key) {
@@ -7056,6 +7057,7 @@ class Env {
     }
     put(key, value) {
         this.env.set(key, value);
+        globalThis.env = Object.fromEntries(this.env);
     }
 }
 function fromBrowser(req) {
@@ -7086,18 +7088,19 @@ const servfail = dns.Encode({
     type: "response",
     flags: 4098
 });
-const env = new Env();
+const envManager = new EnvManager();
+globalThis.envMap = envManager.getMap();
 if (typeof addEventListener !== "undefined") {
     addEventListener("fetch", (event)=>{
-        if (!env.isLoaded) {
-            env.loadEnv();
+        if (!envManager.isLoaded) {
+            envManager.loadEnv();
         }
         event.respondWith(handleRequest(event));
     });
 }
 function handleRequest(event) {
-    const processingTimeout = env.get("workerTimeout");
-    const respectTimeout = env.get("runTimeEnv") == "worker" && processingTimeout > 0;
+    const processingTimeout = envManager.get("workerTimeout");
+    const respectTimeout = envManager.get("runTimeEnv") == "worker" && processingTimeout > 0;
     if (!respectTimeout) return proxyRequest(event);
     return Promise.race([
         new Promise((resolve, _)=>{
@@ -7119,11 +7122,11 @@ async function proxyRequest(event) {
             corsHeaders(res);
             return res;
         }
-        if (!env.isLoaded) {
-            env.loadEnv();
+        if (!envManager.isLoaded) {
+            envManager.loadEnv();
         }
         const currentRequest = new CurrentRequest();
-        const plugin = new RethinkPlugin(event, env);
+        const plugin = new RethinkPlugin(event);
         await plugin.executePlugin(currentRequest);
         dohHeaders(event.request, currentRequest.httpResponse);
         return currentRequest.httpResponse;
