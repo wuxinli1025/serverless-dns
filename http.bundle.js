@@ -106,7 +106,7 @@ try {
     });
     Deno.env.set("RUNTIME_ENV", "deno");
 } catch (e2) {
-    console.error(".env file may not be loaded => ", e2.name, ":", e2.message);
+    console.warn(".env file may not be loaded => ", e2.name, ":", e2.message);
 }
 "use strict";
 function toString(type) {
