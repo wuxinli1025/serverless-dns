@@ -5085,6 +5085,7 @@ class DNSResolver {
                     this.wCache = caches.default;
                 }
             }
+            if (!this.udpCreateSocket) this.udpCreateSocket = env.cloudPlatform == "fly" && (await import("dgram")).createSocket;
             response.data = await this.checkLocalCacheBfrResolve(param);
         } catch (e12) {
             response = errResponse(e12);
@@ -5142,7 +5143,7 @@ class DNSResolver {
         }
     }
     async resolveDnsUpdateCache(param, cacheRes, dn, now) {
-        const upRes = await resolveDnsUpstream(param.request, param.dnsResolverUrl, param.requestBodyBuffer, param.runTimeEnv, param.cloudPlatform);
+        const upRes = await this.resolveDnsUpstream(param.request, param.dnsResolverUrl, param.requestBodyBuffer, param.runTimeEnv);
         if (!upRes.ok) {
             console.error("!OK", upRes.status, upRes.statusText, await upRes.text());
             throw new Error(upRes.status + " http err: " + upRes.statusText);
@@ -5191,7 +5192,7 @@ class DNSResolver {
 function convertMapToObject(map) {
     return map ? Object.fromEntries(map) : false;
 }
-async function resolveDnsUpstream(request, resolverUrl, requestBodyBuffer, runTimeEnv, cloudPlatform) {
+DNSResolver.prototype.resolveDnsUpstream = async function(request, resolverUrl, requestBodyBuffer, runTimeEnv) {
     try {
         let u = new URL(request.url);
         let dnsResolverUrl = new URL(resolverUrl);
@@ -5202,8 +5203,8 @@ async function resolveDnsUpstream(request, resolverUrl, requestBodyBuffer, runTi
         const headers = {
             Accept: "application/dns-message"
         };
-        if (cloudPlatform === "fly") {
-            return await plaindns(requestBodyBuffer);
+        if (env.cloudPlatform === "fly") {
+            return await this.resolvePlainDns(requestBodyBuffer);
         }
         let newRequest;
         if (request.method === "GET" || runTimeEnv == "worker" && request.method === "POST") {
@@ -5229,7 +5230,7 @@ async function resolveDnsUpstream(request, resolverUrl, requestBodyBuffer, runTi
     } catch (e14) {
         throw e14;
     }
-}
+};
 function emptyResponse() {
     return {
         isException: false,
@@ -5249,12 +5250,11 @@ function errResponse(e15) {
         data: false
     };
 }
-async function plaindns(q) {
-    const Buffer1 = (await import("buffer")).Buffer;
-    const bq = Buffer1.from(q);
-    const udp = await import("dgram");
+DNSResolver.prototype.resolvePlainDns = async function(q) {
+    const self = this;
+    const bq = Buffer.from(q);
     function lookup(resolve, reject) {
-        const client = udp.createSocket("udp6");
+        const client = self.udpCreateSocket("udp6");
         client.on("message", (b, addrinfo)=>{
             const res = new Response(arrayBufferOf(b));
             resolve(res);
@@ -5273,7 +5273,7 @@ async function plaindns(q) {
         });
     }
     return new Promise(lookup);
-}
+};
 function dnsqurl(dnsq) {
     return btoa(String.fromCharCode(...new Uint8Array(dnsq))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }
