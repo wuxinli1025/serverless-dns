@@ -777,9 +777,9 @@ function promisify(original) {
     const argumentNames = original[kCustomPromisifyArgsSymbol];
     function fn(...args) {
         return new Promise((resolve, reject)=>{
-            original.call(this, ...args, (err1, ...values)=>{
-                if (err1) {
-                    return reject(err1);
+            original.call(this, ...args, (err, ...values)=>{
+                if (err) {
+                    return reject(err);
                 }
                 if (argumentNames !== undefined && values.length > 1) {
                     const obj = {
@@ -5100,12 +5100,15 @@ class DNSResolver {
         const dn = (param.requestDecodedDnsPacket.questions.length > 0 ? param.requestDecodedDnsPacket.questions[0].name : "").trim().toLowerCase() + ":" + param.requestDecodedDnsPacket.questions[0].type;
         const now = Date.now();
         let cacheRes = this.dnsResCache.Get(dn);
+        console.debug("Local Cache Data", JSON.stringify(cacheRes));
         if (!cacheRes || now >= cacheRes.ttlEndTime) {
             cacheRes = await this.checkSecondLevelCacheBfrResolve(param.runTimeEnv, param.request.url, dn, now);
+            console.debug("Cache Api Response", cacheRes);
             if (!cacheRes) {
                 cacheRes = {
                 };
                 resp.responseBodyBuffer = await this.resolveDnsUpdateCache(param, cacheRes, dn, now);
+                console.debug("resolve update response", cacheRes);
                 resp.responseDecodedDnsPacket = cacheRes.decodedDnsPacket;
                 this.dnsResCache.Put(dn, cacheRes);
                 return resp;
@@ -5122,6 +5125,7 @@ class DNSResolver {
         for (let answer1 of decodedDnsPacket.answers){
             answer1.ttl = outttl;
         }
+        console.debug("ttl", end - now, "res", JSON.stringify(decodedDnsPacket));
         return this.dnsParser.Encode(decodedDnsPacket);
     }
     async checkSecondLevelCacheBfrResolve(runTimeEnv, reqUrl, dn, now) {
@@ -5259,16 +5263,16 @@ DNSResolver.prototype.resolvePlainDns = async function(q) {
             const res = new Response(arrayBufferOf(b));
             resolve(res);
         });
-        client.on("error", (err2)=>{
-            if (err2) {
-                console.error("plaindns recv fail", err2);
-                reject(err2.message);
+        client.on("error", (err)=>{
+            if (err) {
+                console.error("plaindns recv fail", err);
+                reject(err.message);
             }
         });
-        client.send(bq, 53, flydns6, (err3)=>{
-            if (err3) {
-                console.error("plaindns send fail", err3);
-                reject(err3.message);
+        client.send(bq, 53, flydns6, (err)=>{
+            if (err) {
+                console.error("plaindns send fail", err);
+                reject(err.message);
             }
         });
     }
@@ -5417,7 +5421,7 @@ BitString.prototype = {
         }
         return e16;
     },
-    get: function(p, n, debug4 = false) {
+    get: function(p, n, debug = false) {
         if (p % W + n <= W) {
             return (this.bytes[p / W | 0] & BitString.MaskTop[W][p % W]) >> W - p % W - n;
         } else {
@@ -5439,7 +5443,7 @@ BitString.prototype = {
             if (n > 0) {
                 result = result << n | this.bytes[p / W | 0] >> W - n;
             }
-            if (debug4 == true) {
+            if (debug == true) {
                 console.log("disp1: " + disp1 + " disp2: " + disp2 + " loopcount: " + tmpCount + " res1: " + res1 + " res2: " + res2 + " r: " + result);
             }
             return result;
@@ -5721,7 +5725,7 @@ FrozenTrie.prototype = {
     lookup: function(word) {
         const index = word.lastIndexOf(ENC_DELIM[0]);
         if (index > 0) word = word.slice(0, index);
-        const debug5 = config1.debug;
+        const debug = config1.debug;
         let node = this.getRoot();
         let child;
         let returnValue = false;
@@ -5740,11 +5744,11 @@ FrozenTrie.prototype = {
                 isFlag += 1;
             }while (isFlag + 1 < node.getChildCount())
             const minChild = isFlag;
-            if (debug5) {
+            if (debug) {
                 console.log("            count: " + node.getChildCount() + " i: " + i10 + " w: " + word[i10] + " nl: " + node.letter() + " flag: " + isFlag);
             }
             if (node.getChildCount() - 1 <= minChild) {
-                if (debug5) {
+                if (debug) {
                     console.log("  no more children left, remaining word: " + word.slice(i10));
                 }
                 return returnValue;
@@ -5753,16 +5757,16 @@ FrozenTrie.prototype = {
                 let j = isFlag;
                 for(; j < node.getChildCount(); j++){
                     child = node.getChild(j);
-                    if (debug5) {
+                    if (debug) {
                         console.log("it: " + j + " tl: " + child.letter() + " wl: " + word[i10]);
                     }
                     if (child.letter() == word[i10]) {
-                        if (debug5) console.log("it: " + j + " break ");
+                        if (debug) console.log("it: " + j + " break ");
                         break;
                     }
                 }
                 if (j === node.getChildCount()) {
-                    if (debug5) console.log("j: " + j + " c: " + node.getChildCount());
+                    if (debug) console.log("j: " + j + " c: " + node.getChildCount());
                     return returnValue;
                 }
             } else {
@@ -5772,7 +5776,7 @@ FrozenTrie.prototype = {
                     const probe = (high + low) / 2 | 0;
                     child = node.getChild(probe);
                     const prevchild = probe > isFlag ? node.getChild(probe - 1) : undefined;
-                    if (debug5) {
+                    if (debug) {
                         console.log("        current: " + child.letter() + " l: " + low + " h: " + high + " w: " + word[i10]);
                     }
                     if (child.compressed() || prevchild && prevchild.compressed() && !prevchild.flag()) {
@@ -5790,12 +5794,12 @@ FrozenTrie.prototype = {
                             start += 1;
                         }while (true)
                         if (startchild[start - 1].letter() > word[i10]) {
-                            if (debug5) {
+                            if (debug) {
                                 console.log("        shrinkh start: " + startchild[start - 1].letter() + " s: " + start + " w: " + word[i10]);
                             }
                             high = probe - start + 1;
                             if (high - low <= 1) {
-                                if (debug5) {
+                                if (debug) {
                                     console.log("...h-low: " + (high - low) + " c: " + node.getChildCount(), high, low, child.letter(), word[i10], probe);
                                 }
                                 return returnValue;
@@ -5811,12 +5815,12 @@ FrozenTrie.prototype = {
                             }while (true)
                         }
                         if (startchild[start - 1].letter() < word[i10]) {
-                            if (debug5) {
+                            if (debug) {
                                 console.log("        shrinkl start: " + startchild[start - 1].letter() + " s: " + start + " w: " + word[i10]);
                             }
                             low = probe + end;
                             if (high - low <= 1) {
-                                if (debug5) {
+                                if (debug) {
                                     console.log("...h-low: " + (high - low) + " c: " + node.getChildCount(), high, low, child.letter(), word[i10], probe);
                                 }
                                 return returnValue;
@@ -5827,14 +5831,14 @@ FrozenTrie.prototype = {
                         const comp = nodes.map((n)=>n.letter()
                         );
                         const w = word.slice(i10, i10 + comp.length);
-                        if (debug5) {
+                        if (debug) {
                             console.log("it: " + probe + " tl: " + comp + " wl: " + w + " c: " + child.letter());
                         }
                         if (w.length < comp.length) return returnValue;
                         for(let i11 = 0; i11 < comp.length; i11++){
                             if (w[i11] !== comp[i11]) return returnValue;
                         }
-                        if (debug5) console.log("it: " + probe + " break ");
+                        if (debug) console.log("it: " + probe + " break ");
                         child = nodes[nodes.length - 1];
                         i10 += comp.length - 1;
                         break;
@@ -5848,14 +5852,14 @@ FrozenTrie.prototype = {
                         }
                     }
                     if (high - low <= 1) {
-                        if (debug5) {
+                        if (debug) {
                             console.log("h-low: " + (high - low) + " c: " + node.getChildCount(), high, low, child.letter(), word[i10], probe);
                         }
                         return returnValue;
                     }
                 }
             }
-            if (debug5) console.log("        next: " + child.letter());
+            if (debug) console.log("        next: " + child.letter());
             node = child;
         }
         if (node.final()) {
@@ -6146,7 +6150,6 @@ function decodeFromBinary(b, u8) {
 function decodeFromBinaryArray(b) {
     return decodeFromBinary(b, true);
 }
-let debug = false;
 class BlocklistWrapper {
     constructor(){
         this.blocklistFilter = new BlocklistFilter();
@@ -6210,11 +6213,11 @@ class BlocklistWrapper {
         try {
             let bl = await downloadBuildBlocklist(blocklistUrl, latestTimestamp, tdNodecount, tdParts);
             this.blocklistFilter.loadFilter(bl.t, bl.ft, bl.blocklistBasicConfig, bl.blocklistFileTag);
-            if (debug) {
-                console.log("done blocklist filter");
+            if (logLevel == "debug") {
+                console.debug("done blocklist filter");
                 let result = this.blocklistFilter.getDomainInfo("google.com");
-                console.log(JSON.stringify(result));
-                console.log(JSON.stringify(result.searchResult.get("google.com")));
+                console.debug(JSON.stringify(result));
+                console.debug(JSON.stringify(result.searchResult.get("google.com")));
             }
             this.isBlocklistUnderConstruction = false;
             response.data.blocklistFilter = this.blocklistFilter;
@@ -6248,10 +6251,8 @@ async function downloadBuildBlocklist(blocklistUrl, latestTimestamp, tdNodecount
             buf1,
             buf2
         ]);
-        if (debug) {
-            console.log("call createBlocklistFilter");
-            console.log(blocklistBasicConfig);
-        }
+        console.debug("call createBlocklistFilter");
+        console.debug(blocklistBasicConfig);
         let trie = createBlocklistFilter(downloads[1], downloads[2], downloads[0], blocklistBasicConfig);
         resp.t = trie.t;
         resp.ft = trie.ft;
@@ -6266,9 +6267,7 @@ async function fileFetch(url, typ) {
     if (typ !== "buffer" && typ !== "json") {
         throw new Error("Unknown conversion type at fileFetch");
     }
-    if (debug) {
-        console.log("Start Downloading : " + url);
-    }
+    console.debug("Start Downloading : " + url);
     const res = await fetch(url, {
         cf: {
             cacheTtl: 1209600
@@ -6295,9 +6294,7 @@ const sleep = (ms)=>{
     });
 };
 async function makeTd(baseurl, n) {
-    if (debug) {
-        console.log("Make Td Starts : Tdparts -> " + n);
-    }
+    console.debug("Make Td Starts : Tdparts -> " + n);
     if (n <= -1) {
         return fileFetch(baseurl + "/td.txt", "buffer");
     }
@@ -6310,9 +6307,7 @@ async function makeTd(baseurl, n) {
         tdpromises.push(fileFetch(f, "buffer"));
     }
     const tds = await Promise.all(tdpromises);
-    if (debug) {
-        console.log("all td download successful");
-    }
+    console.debug("all td download successful");
     return new Promise((resolve, reject)=>{
         resolve(concat(tds));
     });
@@ -6330,7 +6325,6 @@ function concat(arraybuffers) {
     }
     return buf;
 }
-let debug1 = false;
 class DNSAggCache {
     constructor(){
         this.dnsParser = new DNSParserWrap();
@@ -6372,10 +6366,8 @@ class DNSAggCache {
         if (param.isAggCacheReq) {
             const dn = (response.reqDecodedDnsPacket.questions.length > 0 ? response.reqDecodedDnsPacket.questions[0].name : "").trim().toLowerCase() + ":" + response.reqDecodedDnsPacket.questions[0].type;
             let cacheResponse = await getCacheapi(this.wCache, param.request.url, dn);
-            if (debug1) {
-                console.log("Cache Api Response");
-                console.log(cacheResponse);
-            }
+            console.debug("Cache Api Response");
+            console.debug(cacheResponse);
             if (cacheResponse) {
                 response.aggCacheResponse = await parseCacheapiResponse(cacheResponse, this.dnsParser, this.dnsBlockOperation, this.blocklistFilter, param.userBlocklistInfo, response.reqDecodedDnsPacket);
             }
@@ -6390,10 +6382,8 @@ async function parseCacheapiResponse(cacheResponse, dnsParser, dnsBlockOperation
     response.data = {
     };
     let metaData = JSON.parse(cacheResponse.headers.get("x-rethink-metadata"));
-    if (debug1) {
-        console.log("Response Found at CacheApi");
-        console.log(JSON.stringify(metaData));
-    }
+    console.debug("Response Found at CacheApi");
+    console.debug(JSON.stringify(metaData));
     if ((reqDecodedDnsPacket.questions[0].type == "A" || reqDecodedDnsPacket.questions[0].type == "AAAA" || reqDecodedDnsPacket.questions[0].type == "CNAME" || reqDecodedDnsPacket.questions[0].type == "HTTPS" || reqDecodedDnsPacket.questions[0].type == "SVCB") && metaData.blocklistInfo && userBlocklistInfo.userBlocklistFlagUint !== "") {
         metaData.blocklistInfo = new Map(Object.entries(metaData.blocklistInfo));
         let blockResponse = dnsBlockOperation.checkDomainBlocking(userBlocklistInfo.userBlocklistFlagUint, userBlocklistInfo.userServiceListUint, userBlocklistInfo.flagVersion, metaData.blocklistInfo, blocklistFilter, reqDecodedDnsPacket.questions[0].name.trim().toLowerCase());
@@ -6421,30 +6411,53 @@ async function getCacheapi(wCache, reqUrl, key) {
     let wCacheUrl = new URL(new URL(reqUrl).origin + "/" + key);
     return await wCache.match(wCacheUrl);
 }
-let debug2 = false;
-let timer = debug2 || false;
-let gen = debug2 || true;
-let info = gen || true;
-let warn = info || true;
-let err = warn || true;
+function setLogLevel(level) {
+    level = level.toLowerCase().trim();
+    switch(level){
+        case "error":
+            globalThis.console.warn = ()=>null
+            ;
+        case "warn":
+            globalThis.console.info = ()=>null
+            ;
+        case "info":
+            globalThis.console.time = ()=>null
+            ;
+            globalThis.console.timeEnd = ()=>null
+            ;
+            globalThis.console.timeLog = ()=>null
+            ;
+        case "timer":
+            globalThis.console.debug = ()=>null
+            ;
+        case "debug":
+            break;
+        default:
+            console.error("Unknown log level", level);
+            level = null;
+    }
+    if (level) {
+        console.log("Global Log level set to :", level);
+        globalThis.logLevel = level;
+    }
+    return level;
+}
 function e30() {
-    if (err) console.error(...arguments);
+    console.error(...arguments);
 }
 function d() {
-    if (debug2) console.debug(...arguments);
+    console.debug(...arguments);
 }
 function laptime() {
-    if (timer) console.timeLog(...arguments);
+    console.timeLog(...arguments);
 }
 function starttime(name) {
-    if (timer) {
-        name += id();
-        console.time(name);
-    }
+    name += id();
+    console.time(name);
     return name;
 }
 function endtime(name) {
-    if (timer) console.timeEnd(name);
+    console.timeEnd(name);
 }
 function id() {
     return (Math.random() + 1).toString(36).slice(1);
@@ -6538,13 +6551,12 @@ function setResponseCommonHeader() {
         this.httpResponse.headers.set('x-nile-flag-notblocked', this.blockedB64Flag);
     }
 }
-let debug3 = false;
 class CommandControl {
     constructor(){
         this.latestTimestamp = "";
     }
     async RethinkModule(param) {
-        if (debug3) console.log("In CommandControl");
+        console.debug("In CommandControl");
         this.latestTimestamp = param.latestTimestamp;
         let response = {
         };
@@ -7006,6 +7018,7 @@ class EnvManager {
         try {
             this.env.set("runTimeEnv", RUNTIME_ENV);
             this.env.set("cloudPlatform", CLOUD_PLATFORM);
+            this.env.set("logLevel", LOG_LEVEL);
             this.env.set("blocklistUrl", CF_BLOCKLIST_URL);
             this.env.set("latestTimestamp", CF_LATEST_BLOCKLIST_TIMESTAMP);
             this.env.set("dnsResolverUrl", CF_DNS_RESOLVER_URL);
@@ -7024,8 +7037,10 @@ class EnvManager {
         globalThis.env = Object.fromEntries(this.env);
     }
     loadEnvDeno() {
+        console.info("Loading env variables from Deno");
         this.env.set("runTimeEnv", Deno.env.get("RUNTIME_ENV"));
         this.env.set("cloudPlatform", Deno.env.get("CLOUD_PLATFORM"));
+        this.env.set("logLevel", Deno.env.get("LOG_LEVEL"));
         this.env.set("blocklistUrl", Deno.env.get("CF_BLOCKLIST_URL"));
         this.env.set("latestTimestamp", Deno.env.get("CF_LATEST_BLOCKLIST_TIMESTAMP"));
         this.env.set("dnsResolverUrl", Deno.env.get("CF_DNS_RESOLVER_URL"));
@@ -7037,8 +7052,10 @@ class EnvManager {
         this.isLoaded = true;
     }
     loadEnvNode() {
+        console.info("Loading env variables from Node");
         this.env.set("runTimeEnv", process.env.RUNTIME_ENV);
         this.env.set("cloudPlatform", process.env.CLOUD_PLATFORM);
+        this.env.set("logLevel", process.env.LOG_LEVEL);
         this.env.set("blocklistUrl", process.env.CF_BLOCKLIST_URL);
         this.env.set("latestTimestamp", process.env.CF_LATEST_BLOCKLIST_TIMESTAMP);
         this.env.set("dnsResolverUrl", process.env.CF_DNS_RESOLVER_URL);
@@ -7098,6 +7115,9 @@ function handleRequest(event) {
     if (!envManager.isLoaded) {
         envManager.loadEnv();
     }
+    if (!globalThis.logLevel) {
+        setLogLevel(env.logLevel || "info");
+    }
     const processingTimeout = envManager.get("workerTimeout");
     const respectTimeout = envManager.get("runTimeEnv") == "worker" && processingTimeout > 0;
     if (!respectTimeout) return proxyRequest(event);
@@ -7126,9 +7146,9 @@ async function proxyRequest(event) {
         await plugin.executePlugin(currentRequest);
         dohHeaders(event.request, currentRequest.httpResponse);
         return currentRequest.httpResponse;
-    } catch (err4) {
-        e30(err4.stack);
-        return errorOrServfail(event, err4);
+    } catch (err) {
+        e30(err.stack);
+        return errorOrServfail(event, err);
     }
 }
 function errorOrServfail(event, err) {
