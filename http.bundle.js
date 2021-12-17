@@ -5175,9 +5175,8 @@ class DNSResolver {
             let wCacheUrl = new URL(new URL(param.request.url).origin + "/" + dn);
             let response = new Response(responseBodyBuffer, {
                 headers: {
-                    "Cache-Control": "s-maxage=" + minttl,
                     "Content-Length": responseBodyBuffer.length,
-                    "Content-Type": "application/octet-stream",
+                    "Content-Type": "application/dns-message",
                     "x-rethink-metadata": JSON.stringify({
                         ttlEndTime: cacheRes.ttlEndTime,
                         bodyUsed: true,
@@ -5185,7 +5184,7 @@ class DNSResolver {
                     })
                 },
                 cf: {
-                    cacheTtl: minttl
+                    cacheTtl: 604800
                 }
             });
             param.event.waitUntil(this.wCache.put(wCacheUrl, response));
@@ -6462,6 +6461,14 @@ function endtime(name) {
 function id() {
     return (Math.random() + 1).toString(36).slice(1);
 }
+const dns = new DNSParserWrap();
+const servfail = dns.Encode({
+    type: "response",
+    flags: 4098
+});
+const mod = {
+    servfail: servfail
+};
 class CurrentRequest {
     constructor(){
         this.blockedB64Flag = "";
@@ -6481,26 +6488,18 @@ class CurrentRequest {
         };
         singleLog.exceptionFrom = this.exceptionFrom;
         singleLog.exceptionStack = this.exceptionStack;
-        const dnsEncodeObj = this.dnsParser.Encode({
-            type: "response",
-            flags: 4098
-        });
-        this.httpResponse = new Response(dnsEncodeObj);
-        setResponseCommonHeader.call(this);
+        this.httpResponse = new Response(mod.servfail);
+        this.setHeaders();
         this.httpResponse.headers.set("x-err", JSON.stringify(singleLog));
     }
     customResponse(data) {
-        const dnsEncodeObj = this.dnsParser.Encode({
-            type: "response",
-            flags: 1
-        });
-        this.httpResponse = new Response(dnsEncodeObj);
-        setResponseCommonHeader.call(this);
+        this.httpResponse = new Response(mod);
+        this.setHeaders();
         this.httpResponse.headers.set("x-err", JSON.stringify(data));
     }
     dnsResponse(arrayBuffer) {
         this.httpResponse = new Response(arrayBuffer);
-        setResponseCommonHeader.call(this);
+        this.setHeaders();
     }
     dnsBlockResponse() {
         try {
@@ -6531,7 +6530,7 @@ class CurrentRequest {
             }
             this.decodedDnsPacket.authorities = [];
             this.httpResponse = new Response(this.dnsParser.Encode(this.decodedDnsPacket));
-            setResponseCommonHeader.call(this);
+            this.setHeaders();
         } catch (e26) {
             e30(JSON.stringify(this.decodedDnsPacket));
             this.isException = true;
@@ -6539,16 +6538,16 @@ class CurrentRequest {
             this.exceptionFrom = "CurrentRequest dnsBlockResponse";
         }
     }
-}
-function setResponseCommonHeader() {
-    this.httpResponse.headers.set("Content-Type", "application/dns-message");
-    this.httpResponse.headers.append("Vary", "Origin");
-    this.httpResponse.headers.delete("expect-ct");
-    this.httpResponse.headers.delete("cf-ray");
-    if (this.isDnsBlock) {
-        this.httpResponse.headers.set("x-nile-flags", this.blockedB64Flag);
-    } else if (this.blockedB64Flag !== "") {
-        this.httpResponse.headers.set('x-nile-flag-notblocked', this.blockedB64Flag);
+    setHeaders() {
+        this.httpResponse.headers.set("Content-Type", "application/dns-message");
+        this.httpResponse.headers.append("Vary", "Origin");
+        this.httpResponse.headers.delete("expect-ct");
+        this.httpResponse.headers.delete("cf-ray");
+        if (this.isDnsBlock) {
+            this.httpResponse.headers.set("x-nile-flags", this.blockedB64Flag);
+        } else if (this.blockedB64Flag !== "") {
+            this.httpResponse.headers.set('x-nile-flag-notblocked', this.blockedB64Flag);
+        }
     }
 }
 class CommandControl {
@@ -6956,7 +6955,7 @@ function dnsResolverCallBack(response, currentRequest) {
     }
 }
 function dnsResponseBlockCallBack(response, currentRequest) {
-    d("In dnsCnameBlockCallBack", JSON.stringify(response.data));
+    d("In dnsResponseBlockCallBack", JSON.stringify(response.data));
     if (response.isException) {
         loadException(response, currentRequest);
     } else {
@@ -7100,11 +7099,6 @@ function dohHeaders(req, res) {
     dnsHeaders(res);
     if (fromBrowser(req)) corsHeaders(res);
 }
-const dns = new DNSParserWrap();
-const servfail = dns.Encode({
-    type: "response",
-    flags: 4098
-});
 globalThis.envManager = new EnvManager();
 if (typeof addEventListener !== "undefined") {
     addEventListener("fetch", (event)=>{
