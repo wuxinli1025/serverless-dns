@@ -6444,7 +6444,6 @@ function globalConsoleLevel(level) {
 }
 class Log {
     constructor(level){
-        this.setLevel(level);
         this.logLevels = [
             "error",
             "warn",
@@ -6452,6 +6451,7 @@ class Log {
             "timer",
             "debug"
         ];
+        this.setLevel(level);
     }
     resetLevel() {
         this.l = console.log;
