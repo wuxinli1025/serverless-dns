@@ -61,10 +61,10 @@ function config(options = {
 function parseFile(filepath) {
     try {
         return parse(new TextDecoder("utf-8").decode(Deno.readFileSync(filepath)));
-    } catch (e1) {
-        if (e1 instanceof Deno.errors.NotFound) return {
+    } catch (e) {
+        if (e instanceof Deno.errors.NotFound) return {
         };
-        throw e1;
+        throw e;
     }
 }
 function isVariableStart(str) {
@@ -105,8 +105,8 @@ try {
         export: true
     });
     Deno.env.set("RUNTIME_ENV", "deno");
-} catch (e2) {
-    console.warn(".env file may not be loaded => ", e2.name, ":", e2.message);
+} catch (e28) {
+    console.warn(".env file may not be loaded => ", e28.name, ":", e28.message);
 }
 "use strict";
 function toString(type) {
@@ -3392,10 +3392,10 @@ rtxt.encode = function(data, buf, offset) {
     if (!offset) offset = 0;
     const oldOffset = offset;
     offset += 2;
-    data.forEach(function(d1) {
-        buf[offset++] = d1.length;
-        d1.copy(buf, offset, 0, d1.length);
-        offset += d1.length;
+    data.forEach(function(d) {
+        buf[offset++] = d.length;
+        d.copy(buf, offset, 0, d.length);
+        offset += d.length;
     });
     buf.writeUInt16BE(offset - oldOffset - 2, oldOffset);
     rtxt.encode.bytes = offset - oldOffset;
@@ -4741,17 +4741,17 @@ class DNSParserWrap {
     Decode(arrayBuffer) {
         try {
             return decode2(Buffer.from(new Uint8Array(arrayBuffer)));
-        } catch (e3) {
+        } catch (e1) {
             console.error("Error At : DNSParserWrap -> Decode");
-            throw e3;
+            throw e1;
         }
     }
     Encode(DecodedDnsPacket) {
         try {
             return encode2(DecodedDnsPacket);
-        } catch (e4) {
+        } catch (e2) {
             console.error("Error At : DNSParserWrap -> Encode");
-            throw e4;
+            throw e2;
         }
     }
 }
@@ -4775,8 +4775,8 @@ class DNSBlockOperation {
                     }
                 }
             }
-        } catch (e5) {
-            throw e5;
+        } catch (e3) {
+            throw e3;
         }
         return response;
     }
@@ -4799,8 +4799,8 @@ function checkDomainNameUserFlagIntersection(userBlocklistFlagUint, flagVersion,
                 response.blockedB64Flag = blocklistFilter.getB64FlagFromUint16(blockedUint, flagVersion);
             }
         }
-    } catch (e6) {
-        throw e6;
+    } catch (e4) {
+        throw e4;
     }
     return response;
 }
@@ -4836,12 +4836,12 @@ class DNSBlock {
                     }
                 }
             }
-        } catch (e7) {
+        } catch (e5) {
             response.isException = true;
-            response.exceptionStack = e7.stack;
+            response.exceptionStack = e5.stack;
             response.exceptionFrom = "DNSBlock RethinkModule";
             console.error("Error At : DNSBlock -> RethinkModule");
-            console.error(e7.stack);
+            console.error(e5.stack);
         }
         return response;
     }
@@ -4885,12 +4885,12 @@ class DNSResponseBlock {
                     checkHttpsSvcbBlock(param, response, this.dnsBlockOperation);
                 }
             }
-        } catch (e8) {
+        } catch (e6) {
             response.isException = true;
-            response.exceptionStack = e8.stack;
+            response.exceptionStack = e6.stack;
             response.exceptionFrom = "DNSResponseBlock RethinkModule";
             console.error("Error At : DNSResponseBlock -> RethinkModule");
-            console.error(e8.stack);
+            console.error(e6.stack);
         }
         return response;
     }
@@ -5036,18 +5036,18 @@ class LfuCache {
         let val = false;
         try {
             val = this.cache.val(key) || false;
-        } catch (e9) {
+        } catch (e7) {
             console.log("Error: " + this.id + " -> Get");
-            console.log(e9.stack);
+            console.log(e7.stack);
         }
         return val;
     }
     Put(key, val) {
         try {
             this.cache.put(key, val);
-        } catch (e10) {
+        } catch (e8) {
             console.log("Error: " + this.id + " -> Put");
-            console.log(e10.stack);
+            console.log(e8.stack);
         }
     }
 }
@@ -5061,9 +5061,9 @@ class LocalCache {
     Put(key, data) {
         try {
             this.localCache.Put(key, data);
-        } catch (e11) {
+        } catch (e9) {
             console.error("Error At : LocalCache -> Put");
-            console.error(e11.stack);
+            console.error(e9.stack);
         }
     }
 }
@@ -5087,10 +5087,10 @@ class DNSResolver {
             }
             if (!this.udpCreateSocket) this.udpCreateSocket = env.cloudPlatform == "fly" && (await import("dgram")).createSocket;
             response.data = await this.checkLocalCacheBfrResolve(param);
-        } catch (e12) {
-            response = errResponse(e12);
+        } catch (e10) {
+            response = errResponse(e10);
             console.error("Error At : DNSResolver -> RethinkModule");
-            console.error(e12.stack);
+            console.error(e10.stack);
         }
         return response;
     }
@@ -5159,9 +5159,9 @@ class DNSResolver {
         let decodedDnsPacket = (()=>{
             try {
                 return this.dnsParser.Decode(responseBodyBuffer);
-            } catch (e13) {
+            } catch (e11) {
                 console.error("decode fail", upRes.status, "cached:", responseBodyBuffer);
-                throw e13;
+                throw e11;
             }
         })();
         let minttl = 0;
@@ -5230,8 +5230,8 @@ DNSResolver.prototype.resolveDnsUpstream = async function(request, resolverUrl, 
             throw new Error("get/post requests only");
         }
         return await fetch(newRequest);
-    } catch (e14) {
-        throw e14;
+    } catch (e12) {
+        throw e12;
     }
 };
 function emptyResponse() {
@@ -5245,10 +5245,10 @@ function emptyResponse() {
         }
     };
 }
-function errResponse(e15) {
+function errResponse(e13) {
     return {
         isException: true,
-        exceptionStack: e15.stack,
+        exceptionStack: e13.stack,
         exceptionFrom: "DNSResolver RethinkModule",
         data: false
     };
@@ -5414,11 +5414,11 @@ BitString.prototype = {
         return this.bytes;
     },
     encode: function(n) {
-        const e16 = [];
+        const e14 = [];
         for(let i3 = 0; i3 < this.length; i3 += n){
-            e16.push(this.get(i3, Math.min(this.length, n)));
+            e14.push(this.get(i3, Math.min(this.length, n)));
         }
-        return e16;
+        return e14;
     },
     get: function(p, n, debug = false) {
         if (p % W + n <= W) {
@@ -5472,15 +5472,15 @@ BitString.prototype = {
             return index;
         }
         while(n > 0){
-            const d2 = this.get(i4, step);
-            const bits0 = step - countSetBits(d2);
+            const d = this.get(i4, step);
+            const bits0 = step - countSetBits(d);
             if (n - bits0 < 0) {
                 step = Math.max(n, step / 2 | 0);
                 continue;
             }
             n -= bits0;
             i4 += step;
-            const diff = n === 0 ? bit0(d2, 1, step) : 1;
+            const diff = n === 0 ? bit0(d, 1, step) : 1;
             index = i4 - diff;
         }
         return index;
@@ -5909,8 +5909,8 @@ function createBlocklistFilter(tdbuf, rdbuf, blocklistFileTag, blocklistBasicCon
             t: tags,
             ft: frozentrie
         };
-    } catch (e17) {
-        throw e17;
+    } catch (e15) {
+        throw e15;
     }
 }
 const ALPHA32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -6030,8 +6030,8 @@ class BlocklistFilter {
                 intersectFlag[count++] = bodyData;
             }
             return intersectFlag;
-        } catch (e18) {
-            throw e18;
+        } catch (e16) {
+            throw e16;
         }
     }
     customTagToFlag(tagList) {
@@ -6044,8 +6044,8 @@ class BlocklistFilter {
             } else if (flagVersion == "1") {
                 return "1:" + encodeURI(btoa(encodeToBinary(customTagToFlag(tagList, this.blocklistFileTag))).replace(/\//g, "_").replace(/\+/g, "-"));
             }
-        } catch (e19) {
-            throw e19;
+        } catch (e17) {
+            throw e17;
         }
     }
     getB64FlagFromUint16(arr, flagVersion) {
@@ -6055,8 +6055,8 @@ class BlocklistFilter {
             } else if (flagVersion == "1") {
                 return "1:" + encodeURI(btoa(encodeUint16arrToBinary(arr)).replace(/\//g, "_").replace(/\+/g, "-"));
             }
-        } catch (e20) {
-            throw e20;
+        } catch (e18) {
+            throw e18;
         }
     }
 }
@@ -6107,8 +6107,8 @@ function toUint(flag) {
         response.flagVersion = v;
         response.userBlocklistFlagUint = convertor(f) || "";
         return response;
-    } catch (e21) {
-        throw e21;
+    } catch (e19) {
+        throw e19;
     }
 }
 function Base64ToUint(b64Flag) {
@@ -6190,12 +6190,12 @@ class BlocklistWrapper {
                 response.exceptionStack = this.exceptionStack ? this.exceptionStack : "Problem in loading blocklistFilter - Waiting Timeout";
                 response.exceptionFrom = this.exceptionFrom ? this.exceptionFrom : "blocklistWrapper.js RethinkModule";
             }
-        } catch (e22) {
+        } catch (e20) {
             response.isException = true;
-            response.exceptionStack = e22.stack;
+            response.exceptionStack = e20.stack;
             response.exceptionFrom = "blocklistWrapper.js RethinkModule";
             console.error("Error At -> BlocklistWrapper RethinkModule");
-            console.error(e22.stack);
+            console.error(e20.stack);
         }
         return response;
     }
@@ -6212,7 +6212,7 @@ class BlocklistWrapper {
         try {
             let bl = await downloadBuildBlocklist(blocklistUrl, latestTimestamp, tdNodecount, tdParts);
             this.blocklistFilter.loadFilter(bl.t, bl.ft, bl.blocklistBasicConfig, bl.blocklistFileTag);
-            if (logLevel == "debug") {
+            if (console.level == "debug") {
                 console.debug("done blocklist filter");
                 let result = this.blocklistFilter.getDomainInfo("google.com");
                 console.debug(JSON.stringify(result));
@@ -6220,14 +6220,14 @@ class BlocklistWrapper {
             }
             this.isBlocklistUnderConstruction = false;
             response.data.blocklistFilter = this.blocklistFilter;
-        } catch (e23) {
+        } catch (e21) {
             this.isBlocklistUnderConstruction = false;
             response.isException = true;
-            response.exceptionStack = e23.stack;
+            response.exceptionStack = e21.stack;
             response.exceptionFrom = "blocklistWrapper.js initBlocklistConstruction";
             this.exceptionFrom = response.exceptionFrom;
             this.exceptionStack = response.exceptionStack;
-            console.error(e23.stack);
+            console.error(e21.stack);
         }
         return response;
     }
@@ -6258,8 +6258,8 @@ async function downloadBuildBlocklist(blocklistUrl, latestTimestamp, tdNodecount
         resp.blocklistBasicConfig = blocklistBasicConfig;
         resp.blocklistFileTag = downloads[0];
         return resp;
-    } catch (e24) {
-        throw e24;
+    } catch (e22) {
+        throw e22;
     }
 }
 async function fileFetch(url, typ) {
@@ -6343,12 +6343,12 @@ class DNSAggCache {
                 return response;
             }
             response.data = await this.aggCache(param);
-        } catch (e25) {
+        } catch (e23) {
             response.isException = true;
-            response.exceptionStack = e25.stack;
+            response.exceptionStack = e23.stack;
             response.exceptionFrom = "DNSAggCache RethinkModule";
             console.error("Error At : DNSAggCache -> RethinkModule");
-            console.error(e25.stack);
+            console.error(e23.stack);
         }
         return response;
     }
@@ -6410,8 +6410,9 @@ async function getCacheapi(wCache, reqUrl, key) {
     let wCacheUrl = new URL(new URL(reqUrl).origin + "/" + key);
     return await wCache.match(wCacheUrl);
 }
-function setLogLevel(level) {
+function globalConsoleLevel(level) {
     level = level.toLowerCase().trim();
+    if (console.level) throw new Error("Log level already configured");
     switch(level){
         case "error":
             globalThis.console.warn = ()=>null
@@ -6437,26 +6438,62 @@ function setLogLevel(level) {
     }
     if (level) {
         console.log("Global Log level set to :", level);
-        globalThis.logLevel = level;
+        globalThis.console.level = level;
     }
     return level;
 }
-function e30() {
-    console.error(...arguments);
-}
-function d() {
-    console.debug(...arguments);
-}
-function laptime() {
-    console.timeLog(...arguments);
-}
-function starttime(name) {
-    name += id();
-    console.time(name);
-    return name;
-}
-function endtime(name) {
-    console.timeEnd(name);
+class Log {
+    constructor(level){
+        this.setLevel(level);
+        this.logLevels = [
+            "error",
+            "warn",
+            "info",
+            "timer",
+            "debug"
+        ];
+    }
+    resetLevel() {
+        this.l = console.log;
+        this.d = ()=>null
+        ;
+        this.lapTime = ()=>null
+        ;
+        this.startTime = ()=>null
+        ;
+        this.endTime = ()=>null
+        ;
+        this.i = ()=>null
+        ;
+        this.w = ()=>null
+        ;
+        this.e = ()=>null
+        ;
+    }
+    setLevel(level) {
+        this.resetLevel();
+        switch(level){
+            default:
+            case "debug":
+                this.d = console.debug;
+            case "timer":
+                this.lapTime = console.timeLog;
+                this.startTime = function(name) {
+                    name += id();
+                    console.time(name);
+                    return name;
+                };
+                this.endTime = console.timeEnd;
+            case "info":
+                this.i = console.info;
+            case "warn":
+                this.w = console.warn;
+            case "error":
+                this.e = console.error;
+        }
+        if (this.logLevels.indexOf(level) < 0) this.logLevel = "debug";
+        else this.logLevel = level;
+    }
 }
 function id() {
     return (Math.random() + 1).toString(36).slice(1);
@@ -6469,6 +6506,7 @@ const servfail = dns.Encode({
 const mod = {
     servfail: servfail
 };
+const log = new Log();
 class CurrentRequest {
     constructor(){
         this.blockedB64Flag = "";
@@ -6531,10 +6569,10 @@ class CurrentRequest {
             this.decodedDnsPacket.authorities = [];
             this.httpResponse = new Response(this.dnsParser.Encode(this.decodedDnsPacket));
             this.setHeaders();
-        } catch (e26) {
-            e30(JSON.stringify(this.decodedDnsPacket));
+        } catch (e24) {
+            log.e(JSON.stringify(this.decodedDnsPacket));
             this.isException = true;
-            this.exceptionStack = e26.stack;
+            this.exceptionStack = e24.stack;
             this.exceptionFrom = "CurrentRequest dnsBlockResponse";
         }
     }
@@ -6586,8 +6624,8 @@ class CommandControl {
             const pathSplit = reqUrl.pathname.split("/");
             let command = pathSplit[1];
             if (!command) {
-                const d3 = reqUrl.host.split(".");
-                command = d3.length > 3 && d3[2] === "rethinkdns" ? d3[0] : "";
+                const d = reqUrl.host.split(".");
+                command = d.length > 3 && d[2] === "rethinkdns" ? d[0] : "";
             }
             const weburl = command == "" ? "https://rethinkdns.com/configure" : "https://rethinkdns.com/configure?s=added#" + command;
             if (command == "listtob64") {
@@ -6614,9 +6652,9 @@ class CommandControl {
                     statusText: "Bad Request"
                 });
             }
-        } catch (e27) {
+        } catch (e25) {
             response.isException = true;
-            response.exceptionStack = e27.stack;
+            response.exceptionStack = e25.stack;
             response.exceptionFrom = "CommandControl commandOperation";
             response.data.httpResponse = new Response(JSON.stringify(response.exceptionStack));
             response.data.httpResponse.headers.set("Content-Type", "application/json");
@@ -6764,12 +6802,12 @@ class UserOperation {
             userBlocklistInfo.userServiceListUint = currentUser.userServiceListUint;
             response.data.userBlocklistInfo = userBlocklistInfo;
             response.data.dnsResolverUrl = param.dnsResolverUrl;
-        } catch (e28) {
+        } catch (e26) {
             response.isException = true;
-            response.exceptionStack = e28.stack;
+            response.exceptionStack = e26.stack;
             response.exceptionFrom = "UserOperation loadUser";
             console.error("Error At : UserOperation -> loadUser");
-            console.error(e28.stack);
+            console.error(e26.stack);
         }
         return response;
     }
@@ -6787,6 +6825,7 @@ function getBlocklistFlag(url) {
     }
     return blocklistFlag;
 }
+const log1 = new Log();
 const blocklistWrapper = new BlocklistWrapper();
 const commandControl = new CommandControl();
 const userOperation = new UserOperation();
@@ -6863,24 +6902,24 @@ class RethinkPlugin {
         });
     }
     async executePlugin(req) {
-        const t = starttime("exec-plugin");
+        const t = log1.startTime("exec-plugin");
         for (const p of this.plugin){
             if (req.stopProcessing && !p.continueOnStopProcess) {
                 continue;
             }
-            laptime(t, p.name, "send-req");
+            log1.lapTime(t, p.name, "send-req");
             const res = await p.module.RethinkModule(generateParam(this.parameter, p.param));
-            laptime(t, p.name, "got-res");
+            log1.lapTime(t, p.name, "got-res");
             if (p.callBack) {
                 await p.callBack.call(this, res, req);
             }
-            laptime(t, p.name, "post-callback");
+            log1.lapTime(t, p.name, "post-callback");
         }
-        endtime(t);
+        log1.endTime(t);
     }
 }
 function blocklistFilterCallBack(response, currentRequest) {
-    d("In blocklistFilterCallBack");
+    log1.d("In blocklistFilterCallBack");
     if (response.isException) {
         loadException(response, currentRequest);
     } else {
@@ -6888,14 +6927,14 @@ function blocklistFilterCallBack(response, currentRequest) {
     }
 }
 async function commandControlCallBack(response, currentRequest) {
-    d("In commandControlCallBack", JSON.stringify(response.data));
+    log1.d("In commandControlCallBack", JSON.stringify(response.data));
     if (response.data.stopProcessing) {
         currentRequest.httpResponse = response.data.httpResponse;
         currentRequest.stopProcessing = true;
     }
 }
 async function userOperationCallBack(response, currentRequest) {
-    d("In userOperationCallBack", JSON.stringify(response.data));
+    log1.d("In userOperationCallBack", JSON.stringify(response.data));
     if (response.isException) {
         loadException(response, currentRequest);
     } else if (!this.parameter.get("isDnsMsg") && this.parameter.get("request").method === "POST") {
@@ -6911,7 +6950,7 @@ async function userOperationCallBack(response, currentRequest) {
     }
 }
 function dnsAggCacheCallBack(response, currentRequest) {
-    d("In dnsAggCacheCallBack", JSON.stringify(response.data));
+    log1.d("In dnsAggCacheCallBack", JSON.stringify(response.data));
     if (response.isException) {
         loadException(response, currentRequest);
     } else if (response.data !== null) {
@@ -6932,7 +6971,7 @@ function dnsAggCacheCallBack(response, currentRequest) {
     }
 }
 function dnsBlockCallBack(response, currentRequest) {
-    d("In dnsBlockCallBack", JSON.stringify(response.data));
+    log1.d("In dnsBlockCallBack", JSON.stringify(response.data));
     if (response.isException) {
         loadException(response, currentRequest);
     } else {
@@ -6945,7 +6984,7 @@ function dnsBlockCallBack(response, currentRequest) {
     }
 }
 function dnsResolverCallBack(response, currentRequest) {
-    d("In dnsResolverCallBack", JSON.stringify(response.data));
+    log1.d("In dnsResolverCallBack", JSON.stringify(response.data));
     if (response.isException) {
         loadException(response, currentRequest);
     } else {
@@ -6955,7 +6994,7 @@ function dnsResolverCallBack(response, currentRequest) {
     }
 }
 function dnsResponseBlockCallBack(response, currentRequest) {
-    d("In dnsResponseBlockCallBack", JSON.stringify(response.data));
+    log1.d("In dnsResponseBlockCallBack", JSON.stringify(response.data));
     if (response.isException) {
         loadException(response, currentRequest);
     } else {
@@ -6971,7 +7010,7 @@ function dnsResponseBlockCallBack(response, currentRequest) {
     }
 }
 function loadException(response, currentRequest) {
-    e30(JSON.stringify(response));
+    log1.e(JSON.stringify(response));
     currentRequest.stopProcessing = true;
     currentRequest.isException = true;
     currentRequest.exceptionStack = response.exceptionStack;
@@ -7028,10 +7067,10 @@ class EnvManager {
             this.env.set("tdParts", parseInt(TD_PARTS));
             this.env.set("isAggCacheReq", IS_AGGRESSIVE_CACHE_REQ == "true" ? true : false);
             this.isLoaded = true;
-        } catch (e29) {
-            if (e29 instanceof ReferenceError) {
+        } catch (e27) {
+            if (e27 instanceof ReferenceError) {
                 typeof Deno !== "undefined" ? this.loadEnvDeno() : this.loadEnvNode();
-            } else throw e29;
+            } else throw e27;
         }
         globalThis.env = Object.fromEntries(this.env);
     }
@@ -7099,6 +7138,7 @@ function dohHeaders(req, res) {
     dnsHeaders(res);
     if (fromBrowser(req)) corsHeaders(res);
 }
+const log2 = new Log();
 globalThis.envManager = new EnvManager();
 if (typeof addEventListener !== "undefined") {
     addEventListener("fetch", (event)=>{
@@ -7109,8 +7149,8 @@ function handleRequest(event) {
     if (!envManager.isLoaded) {
         envManager.loadEnv();
     }
-    if (!globalThis.logLevel) {
-        setLogLevel(env.logLevel || "info");
+    if (!console.logLevel) {
+        globalConsoleLevel(env.logLevel || "debug");
     }
     const processingTimeout = envManager.get("workerTimeout");
     const respectTimeout = envManager.get("runTimeEnv") == "worker" && processingTimeout > 0;
@@ -7141,7 +7181,7 @@ async function proxyRequest(event) {
         dohHeaders(event.request, currentRequest.httpResponse);
         return currentRequest.httpResponse;
     } catch (err) {
-        e30(err.stack);
+        log2.e(err.stack);
         return errorOrServfail(event, err);
     }
 }
