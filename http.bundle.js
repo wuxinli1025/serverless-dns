@@ -5085,7 +5085,6 @@ class DNSResolver {
                     this.wCache = caches.default;
                 }
             }
-            if (!this.udpCreateSocket) this.udpCreateSocket = env.cloudPlatform == "fly" && (await import("dgram")).createSocket;
             response.data = await this.checkLocalCacheBfrResolve(param);
         } catch (e10) {
             response = errResponse(e10);
@@ -5108,7 +5107,7 @@ class DNSResolver {
                 cacheRes = {
                 };
                 resp.responseBodyBuffer = await this.resolveDnsUpdateCache(param, cacheRes, dn, now);
-                console.debug("resolve update response", cacheRes);
+                console.debug("resolve update response", JSON.stringify(cacheRes));
                 resp.responseDecodedDnsPacket = cacheRes.decodedDnsPacket;
                 this.dnsResCache.Put(dn, cacheRes);
                 return resp;
@@ -5206,8 +5205,13 @@ DNSResolver.prototype.resolveDnsUpstream = async function(request, resolverUrl, 
         const headers = {
             Accept: "application/dns-message"
         };
-        if (env.cloudPlatform === "fly") {
-            return await this.resolvePlainDns(requestBodyBuffer);
+        if (runTimeEnv == "node") {
+            const reqHeaders = request.method == "POST" ? {
+                ...headers,
+                "Content-Type": "application/dns-message",
+                "Content-Length": requestBodyBuffer.byteLength
+            } : headers;
+            return await this.resolveH2Dns(u, request.method, requestBodyBuffer, reqHeaders);
         }
         let newRequest;
         if (request.method === "GET" || runTimeEnv == "worker" && request.method === "POST") {
@@ -5254,10 +5258,11 @@ function errResponse(e13) {
     };
 }
 DNSResolver.prototype.resolvePlainDns = async function(q) {
-    const self = this;
+    if (!this.udpCreateSocket) this.udpCreateSocket = (await import("dgram")).createSocket;
+    const createSocket = this.udpCreateSocket;
     const bq = Buffer.from(q);
     function lookup(resolve, reject) {
-        const client = self.udpCreateSocket("udp6");
+        const client = createSocket("udp6");
         client.on("message", (b, addrinfo)=>{
             const res = new Response(arrayBufferOf(b));
             resolve(res);
@@ -5288,6 +5293,45 @@ function arrayBufferOf(buf) {
     }
     return ab;
 }
+DNSResolver.prototype.resolveH2Dns = async function(u, method, requestBodyBuffer, headers1) {
+    if (!this.http2) this.http2 = await import("http2");
+    const http2 = this.http2;
+    return new Promise((resolve, reject)=>{
+        const c = http2.connect(u.protocol + "//" + u.host);
+        const reqB = Buffer.from(requestBodyBuffer);
+        const req = c.request({
+            [http2.constants.HTTP2_HEADER_METHOD]: method,
+            [http2.constants.HTTP2_HEADER_PATH]: `${u.pathname}`,
+            ...headers1
+        });
+        req.end(reqB);
+        req.on("response", (headers)=>{
+            const resBuffers = [];
+            const resH = {
+            };
+            for(const k in headers){
+                if (k.startsWith(":")) resH[k.slice(1)] = headers[k];
+                else resH[k] = headers[k];
+            }
+            req.on("data", (chunk)=>{
+                resBuffers.push(chunk);
+            });
+            req.on("end", ()=>{
+                const resB = Buffer.concat(resBuffers);
+                c.close();
+                resolve(new Response(resB, resH));
+            });
+            req.on("error", (err)=>{
+                console.error("h2 upstream resolver err => ", err);
+                reject(err);
+            });
+        });
+        c.on("error", (err)=>{
+            console.error("h2 upstream resolver err => ", err);
+            reject(err);
+        });
+    });
+};
 const BASE64 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_";
 const config1 = {
     useBinarySearch: true,
@@ -7149,7 +7193,7 @@ function handleRequest(event) {
     if (!envManager.isLoaded) {
         envManager.loadEnv();
     }
-    if (!console.logLevel) {
+    if (!console.level) {
         globalConsoleLevel(env.logLevel || "debug");
     }
     const processingTimeout = envManager.get("workerTimeout");
