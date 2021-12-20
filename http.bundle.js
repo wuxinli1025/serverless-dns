@@ -7107,7 +7107,6 @@ const _LOG_LEVELS = new Map([
     ]
 ));
 function _setConsoleLevel(level) {
-    level = level;
     switch(level){
         case "error":
             globalThis.console.warn = ()=>null
@@ -7138,9 +7137,9 @@ function _setConsoleLevel(level) {
     return level;
 }
 class Log {
-    constructor(level, consoleLevel){
+    constructor(level, isConsoleLevel){
         if (!_LOG_LEVELS.has(level)) level = "debug";
-        if (consoleLevel && !console.level) _setConsoleLevel(level);
+        if (isConsoleLevel && !console.level) _setConsoleLevel(level);
         this.setLevel(level);
     }
     resetLevel() {
@@ -7196,7 +7195,7 @@ if (typeof addEventListener !== "undefined") {
 }
 function handleRequest(event) {
     if (!envManager.isLoaded) envManager.loadEnv();
-    if (!globalThis.log || !console.level) globalThis.log = new Log(env.logLevel, true);
+    if (!globalThis.log || !console.level) globalThis.log = new Log(env.logLevel || "info", true);
     const processingTimeout = envManager.get("workerTimeout");
     const respectTimeout = envManager.get("runTimeEnv") == "worker" && processingTimeout > 0;
     if (!respectTimeout) return proxyRequest(event);
