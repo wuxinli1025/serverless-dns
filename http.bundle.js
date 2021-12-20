@@ -7095,9 +7095,19 @@ class EnvManager {
         globalThis.env = Object.fromEntries(this.env);
     }
 }
-function globalConsoleLevel(level) {
-    level = level.toLowerCase().trim();
-    if (console.level) throw new Error("Console level already configured");
+const _LOG_LEVELS = new Map([
+    "error",
+    "warn",
+    "info",
+    "timer",
+    "debug"
+].reverse().map((l3, i37)=>[
+        l3,
+        i37
+    ]
+));
+function _setConsoleLevel(level) {
+    level = level;
     switch(level){
         case "error":
             globalThis.console.warn = ()=>null
@@ -7118,25 +7128,19 @@ function globalConsoleLevel(level) {
         case "debug":
             break;
         default:
-            console.error("Unknown console level", level);
+            console.error("Unknown console level: ", level);
             level = null;
     }
     if (level) {
-        console.log("Global console level :", level);
+        console.log("Console level set: ", level);
         globalThis.console.level = level;
     }
     return level;
 }
 class Log {
-    constructor(level){
-        if (!console.level) throw new Error("Console level not configured");
-        this.logLevels = [
-            "error",
-            "warn",
-            "info",
-            "timer",
-            "debug"
-        ];
+    constructor(level, consoleLevel){
+        if (!_LOG_LEVELS.has(level)) level = "debug";
+        if (consoleLevel && !console.level) _setConsoleLevel(level);
         this.setLevel(level);
     }
     resetLevel() {
@@ -7157,6 +7161,10 @@ class Log {
         ;
     }
     setLevel(level) {
+        if (!_LOG_LEVELS.has(level)) throw new Error(`Unknown log level: ${level}`);
+        if (console.level && _LOG_LEVELS.get(level) < _LOG_LEVELS.get(console.level)) {
+            throw new Error(`Cannot set (log.level='${level}') < (console.level = '${console.level}')`);
+        }
         this.resetLevel();
         switch(level){
             default:
@@ -7177,11 +7185,10 @@ class Log {
             case "error":
                 this.e = console.error;
         }
-        if (this.logLevels.indexOf(level) < 0) this.logLevel = "debug";
-        else this.logLevel = level;
+        this.level = level;
     }
 }
-globalThis.envManager = new EnvManager();
+if (!globalThis.envManager) globalThis.envManager = new EnvManager();
 if (typeof addEventListener !== "undefined") {
     addEventListener("fetch", (event)=>{
         event.respondWith(handleRequest(event));
@@ -7189,8 +7196,7 @@ if (typeof addEventListener !== "undefined") {
 }
 function handleRequest(event) {
     if (!envManager.isLoaded) envManager.loadEnv();
-    if (!console.level) globalConsoleLevel(env.logLevel || "debug");
-    if (!globalThis.log) globalThis.log = new Log();
+    if (!globalThis.log || !console.level) globalThis.log = new Log(env.logLevel, true);
     const processingTimeout = envManager.get("workerTimeout");
     const respectTimeout = envManager.get("runTimeEnv") == "worker" && processingTimeout > 0;
     if (!respectTimeout) return proxyRequest(event);
