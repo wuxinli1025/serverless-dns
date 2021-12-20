@@ -6369,7 +6369,7 @@ function cacheMetadata(cacheRes, blocklistFilter) {
 DNSResolver.prototype.resolveDnsUpstream = async function(request, resolverUrl, requestBodyBuffer) {
     try {
         if (isNode() && onFly()) {
-            if (!this.transport) this.transport = new "../helpers/dns/transport.js".Transport(quad1, 53);
+            if (!this.transport) this.transport = new (await import("../helpers/dns/transport.js")).Transport(quad1, 53);
             const q = bufferOf(requestBodyBuffer);
             let ans = await this.transport.udpquery(q);
             if (ans && truncated(ans)) {
