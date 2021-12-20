@@ -108,437 +108,6 @@ try {
 } catch (e28) {
     console.warn(".env file may not be loaded => ", e28.name, ":", e28.message);
 }
-"use strict";
-function toString(type) {
-    switch(type){
-        case 1:
-            return "A";
-        case 10:
-            return "NULL";
-        case 28:
-            return "AAAA";
-        case 18:
-            return "AFSDB";
-        case 42:
-            return "APL";
-        case 257:
-            return "CAA";
-        case 60:
-            return "CDNSKEY";
-        case 59:
-            return "CDS";
-        case 37:
-            return "CERT";
-        case 5:
-            return "CNAME";
-        case 49:
-            return "DHCID";
-        case 32769:
-            return "DLV";
-        case 39:
-            return "DNAME";
-        case 48:
-            return "DNSKEY";
-        case 43:
-            return "DS";
-        case 55:
-            return "HIP";
-        case 13:
-            return "HINFO";
-        case 45:
-            return "IPSECKEY";
-        case 25:
-            return "KEY";
-        case 36:
-            return "KX";
-        case 29:
-            return "LOC";
-        case 15:
-            return "MX";
-        case 35:
-            return "NAPTR";
-        case 2:
-            return "NS";
-        case 47:
-            return "NSEC";
-        case 50:
-            return "NSEC3";
-        case 51:
-            return "NSEC3PARAM";
-        case 12:
-            return "PTR";
-        case 46:
-            return "RRSIG";
-        case 17:
-            return "RP";
-        case 24:
-            return "SIG";
-        case 6:
-            return "SOA";
-        case 99:
-            return "SPF";
-        case 33:
-            return "SRV";
-        case 44:
-            return "SSHFP";
-        case 32768:
-            return "TA";
-        case 249:
-            return "TKEY";
-        case 52:
-            return "TLSA";
-        case 250:
-            return "TSIG";
-        case 16:
-            return "TXT";
-        case 252:
-            return "AXFR";
-        case 251:
-            return "IXFR";
-        case 41:
-            return "OPT";
-        case 255:
-            return "ANY";
-        case 64:
-            return "SVCB";
-        case 65:
-            return "HTTPS";
-    }
-    return "UNKNOWN_" + type;
-}
-function toType(name1) {
-    switch(name1.toUpperCase()){
-        case "A":
-            return 1;
-        case "NULL":
-            return 10;
-        case "AAAA":
-            return 28;
-        case "AFSDB":
-            return 18;
-        case "APL":
-            return 42;
-        case "CAA":
-            return 257;
-        case "CDNSKEY":
-            return 60;
-        case "CDS":
-            return 59;
-        case "CERT":
-            return 37;
-        case "CNAME":
-            return 5;
-        case "DHCID":
-            return 49;
-        case "DLV":
-            return 32769;
-        case "DNAME":
-            return 39;
-        case "DNSKEY":
-            return 48;
-        case "DS":
-            return 43;
-        case "HIP":
-            return 55;
-        case "HINFO":
-            return 13;
-        case "IPSECKEY":
-            return 45;
-        case "KEY":
-            return 25;
-        case "KX":
-            return 36;
-        case "LOC":
-            return 29;
-        case "MX":
-            return 15;
-        case "NAPTR":
-            return 35;
-        case "NS":
-            return 2;
-        case "NSEC":
-            return 47;
-        case "NSEC3":
-            return 50;
-        case "NSEC3PARAM":
-            return 51;
-        case "PTR":
-            return 12;
-        case "RRSIG":
-            return 46;
-        case "RP":
-            return 17;
-        case "SIG":
-            return 24;
-        case "SOA":
-            return 6;
-        case "SPF":
-            return 99;
-        case "SRV":
-            return 33;
-        case "SSHFP":
-            return 44;
-        case "TA":
-            return 32768;
-        case "TKEY":
-            return 249;
-        case "TLSA":
-            return 52;
-        case "TSIG":
-            return 250;
-        case "TXT":
-            return 16;
-        case "AXFR":
-            return 252;
-        case "IXFR":
-            return 251;
-        case "OPT":
-            return 41;
-        case "ANY":
-            return 255;
-        case "*":
-            return 255;
-        case "SVCB":
-            return 64;
-        case "HTTPS":
-            return 65;
-    }
-    if (name1.toUpperCase().startsWith("UNKNOWN_")) return parseInt(name1.slice(8));
-    return 0;
-}
-"use strict";
-function toString1(rcode) {
-    switch(rcode){
-        case 0:
-            return "NOERROR";
-        case 1:
-            return "FORMERR";
-        case 2:
-            return "SERVFAIL";
-        case 3:
-            return "NXDOMAIN";
-        case 4:
-            return "NOTIMP";
-        case 5:
-            return "REFUSED";
-        case 6:
-            return "YXDOMAIN";
-        case 7:
-            return "YXRRSET";
-        case 8:
-            return "NXRRSET";
-        case 9:
-            return "NOTAUTH";
-        case 10:
-            return "NOTZONE";
-        case 11:
-            return "RCODE_11";
-        case 12:
-            return "RCODE_12";
-        case 13:
-            return "RCODE_13";
-        case 14:
-            return "RCODE_14";
-        case 15:
-            return "RCODE_15";
-    }
-    return "RCODE_" + rcode;
-}
-"use strict";
-function toString2(opcode) {
-    switch(opcode){
-        case 0:
-            return "QUERY";
-        case 1:
-            return "IQUERY";
-        case 2:
-            return "STATUS";
-        case 3:
-            return "OPCODE_3";
-        case 4:
-            return "NOTIFY";
-        case 5:
-            return "UPDATE";
-        case 6:
-            return "OPCODE_6";
-        case 7:
-            return "OPCODE_7";
-        case 8:
-            return "OPCODE_8";
-        case 9:
-            return "OPCODE_9";
-        case 10:
-            return "OPCODE_10";
-        case 11:
-            return "OPCODE_11";
-        case 12:
-            return "OPCODE_12";
-        case 13:
-            return "OPCODE_13";
-        case 14:
-            return "OPCODE_14";
-        case 15:
-            return "OPCODE_15";
-    }
-    return "OPCODE_" + opcode;
-}
-"use strict";
-function toString3(klass) {
-    switch(klass){
-        case 1:
-            return "IN";
-        case 2:
-            return "CS";
-        case 3:
-            return "CH";
-        case 4:
-            return "HS";
-        case 255:
-            return "ANY";
-    }
-    return "UNKNOWN_" + klass;
-}
-function toClass(name2) {
-    switch(name2.toUpperCase()){
-        case "IN":
-            return 1;
-        case "CS":
-            return 2;
-        case "CH":
-            return 3;
-        case "HS":
-            return 4;
-        case "ANY":
-            return 255;
-    }
-    return 0;
-}
-"use strict";
-function toString4(type) {
-    switch(type){
-        case 1:
-            return "LLQ";
-        case 2:
-            return "UL";
-        case 3:
-            return "NSID";
-        case 5:
-            return "DAU";
-        case 6:
-            return "DHU";
-        case 7:
-            return "N3U";
-        case 8:
-            return "CLIENT_SUBNET";
-        case 9:
-            return "EXPIRE";
-        case 10:
-            return "COOKIE";
-        case 11:
-            return "TCP_KEEPALIVE";
-        case 12:
-            return "PADDING";
-        case 13:
-            return "CHAIN";
-        case 14:
-            return "KEY_TAG";
-        case 26946:
-            return "DEVICEID";
-    }
-    if (type < 0) {
-        return null;
-    }
-    return `OPTION_${type}`;
-}
-function toCode(name3) {
-    if (typeof name3 === "number") {
-        return name3;
-    }
-    if (!name3) {
-        return -1;
-    }
-    switch(name3.toUpperCase()){
-        case "OPTION_0":
-            return 0;
-        case "LLQ":
-            return 1;
-        case "UL":
-            return 2;
-        case "NSID":
-            return 3;
-        case "OPTION_4":
-            return 4;
-        case "DAU":
-            return 5;
-        case "DHU":
-            return 6;
-        case "N3U":
-            return 7;
-        case "CLIENT_SUBNET":
-            return 8;
-        case "EXPIRE":
-            return 9;
-        case "COOKIE":
-            return 10;
-        case "TCP_KEEPALIVE":
-            return 11;
-        case "PADDING":
-            return 12;
-        case "CHAIN":
-            return 13;
-        case "KEY_TAG":
-            return 14;
-        case "DEVICEID":
-            return 26946;
-        case "OPTION_65535":
-            return 65535;
-    }
-    const m = name3.match(/_(\d+)$/);
-    if (m) {
-        return parseInt(m[1], 10);
-    }
-    return -1;
-}
-"use strict";
-function toString5(type) {
-    switch(type){
-        case 0:
-            return "mandatory";
-        case 1:
-            return "alpn";
-        case 2:
-            return "no-default-alpn";
-        case 3:
-            return "port";
-        case 4:
-            return "ipv4hint";
-        case 5:
-            return "ech";
-        case 6:
-            return "ipv6hint";
-    }
-    return "key" + type;
-}
-function toKey(name4) {
-    switch(name4.toLowerCase()){
-        case "mandatory":
-            return 0;
-        case "alpn":
-            return 1;
-        case "no-default-alpn":
-            return 2;
-        case "port":
-            return 3;
-        case "ipv4hint":
-            return 4;
-        case "ech":
-            return 5;
-        case "ipv6hint":
-            return 6;
-    }
-    if (name4.toLowerCase().startsWith("key")) return parseInt(name4.slice(3));
-    throw "Invalid svcparam key";
-}
 const hexTable = new TextEncoder().encode("0123456789abcdef");
 function errInvalidByte(__byte) {
     return new TypeError(`Invalid byte '${String.fromCharCode(__byte)}'`);
@@ -2893,6 +2462,437 @@ class Buffer extends Uint8Array {
 globalThis.atob;
 globalThis.btoa;
 "use strict";
+function toString(type) {
+    switch(type){
+        case 1:
+            return "A";
+        case 10:
+            return "NULL";
+        case 28:
+            return "AAAA";
+        case 18:
+            return "AFSDB";
+        case 42:
+            return "APL";
+        case 257:
+            return "CAA";
+        case 60:
+            return "CDNSKEY";
+        case 59:
+            return "CDS";
+        case 37:
+            return "CERT";
+        case 5:
+            return "CNAME";
+        case 49:
+            return "DHCID";
+        case 32769:
+            return "DLV";
+        case 39:
+            return "DNAME";
+        case 48:
+            return "DNSKEY";
+        case 43:
+            return "DS";
+        case 55:
+            return "HIP";
+        case 13:
+            return "HINFO";
+        case 45:
+            return "IPSECKEY";
+        case 25:
+            return "KEY";
+        case 36:
+            return "KX";
+        case 29:
+            return "LOC";
+        case 15:
+            return "MX";
+        case 35:
+            return "NAPTR";
+        case 2:
+            return "NS";
+        case 47:
+            return "NSEC";
+        case 50:
+            return "NSEC3";
+        case 51:
+            return "NSEC3PARAM";
+        case 12:
+            return "PTR";
+        case 46:
+            return "RRSIG";
+        case 17:
+            return "RP";
+        case 24:
+            return "SIG";
+        case 6:
+            return "SOA";
+        case 99:
+            return "SPF";
+        case 33:
+            return "SRV";
+        case 44:
+            return "SSHFP";
+        case 32768:
+            return "TA";
+        case 249:
+            return "TKEY";
+        case 52:
+            return "TLSA";
+        case 250:
+            return "TSIG";
+        case 16:
+            return "TXT";
+        case 252:
+            return "AXFR";
+        case 251:
+            return "IXFR";
+        case 41:
+            return "OPT";
+        case 255:
+            return "ANY";
+        case 64:
+            return "SVCB";
+        case 65:
+            return "HTTPS";
+    }
+    return "UNKNOWN_" + type;
+}
+function toType(name) {
+    switch(name.toUpperCase()){
+        case "A":
+            return 1;
+        case "NULL":
+            return 10;
+        case "AAAA":
+            return 28;
+        case "AFSDB":
+            return 18;
+        case "APL":
+            return 42;
+        case "CAA":
+            return 257;
+        case "CDNSKEY":
+            return 60;
+        case "CDS":
+            return 59;
+        case "CERT":
+            return 37;
+        case "CNAME":
+            return 5;
+        case "DHCID":
+            return 49;
+        case "DLV":
+            return 32769;
+        case "DNAME":
+            return 39;
+        case "DNSKEY":
+            return 48;
+        case "DS":
+            return 43;
+        case "HIP":
+            return 55;
+        case "HINFO":
+            return 13;
+        case "IPSECKEY":
+            return 45;
+        case "KEY":
+            return 25;
+        case "KX":
+            return 36;
+        case "LOC":
+            return 29;
+        case "MX":
+            return 15;
+        case "NAPTR":
+            return 35;
+        case "NS":
+            return 2;
+        case "NSEC":
+            return 47;
+        case "NSEC3":
+            return 50;
+        case "NSEC3PARAM":
+            return 51;
+        case "PTR":
+            return 12;
+        case "RRSIG":
+            return 46;
+        case "RP":
+            return 17;
+        case "SIG":
+            return 24;
+        case "SOA":
+            return 6;
+        case "SPF":
+            return 99;
+        case "SRV":
+            return 33;
+        case "SSHFP":
+            return 44;
+        case "TA":
+            return 32768;
+        case "TKEY":
+            return 249;
+        case "TLSA":
+            return 52;
+        case "TSIG":
+            return 250;
+        case "TXT":
+            return 16;
+        case "AXFR":
+            return 252;
+        case "IXFR":
+            return 251;
+        case "OPT":
+            return 41;
+        case "ANY":
+            return 255;
+        case "*":
+            return 255;
+        case "SVCB":
+            return 64;
+        case "HTTPS":
+            return 65;
+    }
+    if (name.toUpperCase().startsWith("UNKNOWN_")) return parseInt(name.slice(8));
+    return 0;
+}
+"use strict";
+function toString1(rcode) {
+    switch(rcode){
+        case 0:
+            return "NOERROR";
+        case 1:
+            return "FORMERR";
+        case 2:
+            return "SERVFAIL";
+        case 3:
+            return "NXDOMAIN";
+        case 4:
+            return "NOTIMP";
+        case 5:
+            return "REFUSED";
+        case 6:
+            return "YXDOMAIN";
+        case 7:
+            return "YXRRSET";
+        case 8:
+            return "NXRRSET";
+        case 9:
+            return "NOTAUTH";
+        case 10:
+            return "NOTZONE";
+        case 11:
+            return "RCODE_11";
+        case 12:
+            return "RCODE_12";
+        case 13:
+            return "RCODE_13";
+        case 14:
+            return "RCODE_14";
+        case 15:
+            return "RCODE_15";
+    }
+    return "RCODE_" + rcode;
+}
+"use strict";
+function toString2(opcode) {
+    switch(opcode){
+        case 0:
+            return "QUERY";
+        case 1:
+            return "IQUERY";
+        case 2:
+            return "STATUS";
+        case 3:
+            return "OPCODE_3";
+        case 4:
+            return "NOTIFY";
+        case 5:
+            return "UPDATE";
+        case 6:
+            return "OPCODE_6";
+        case 7:
+            return "OPCODE_7";
+        case 8:
+            return "OPCODE_8";
+        case 9:
+            return "OPCODE_9";
+        case 10:
+            return "OPCODE_10";
+        case 11:
+            return "OPCODE_11";
+        case 12:
+            return "OPCODE_12";
+        case 13:
+            return "OPCODE_13";
+        case 14:
+            return "OPCODE_14";
+        case 15:
+            return "OPCODE_15";
+    }
+    return "OPCODE_" + opcode;
+}
+"use strict";
+function toString3(klass) {
+    switch(klass){
+        case 1:
+            return "IN";
+        case 2:
+            return "CS";
+        case 3:
+            return "CH";
+        case 4:
+            return "HS";
+        case 255:
+            return "ANY";
+    }
+    return "UNKNOWN_" + klass;
+}
+function toClass(name) {
+    switch(name.toUpperCase()){
+        case "IN":
+            return 1;
+        case "CS":
+            return 2;
+        case "CH":
+            return 3;
+        case "HS":
+            return 4;
+        case "ANY":
+            return 255;
+    }
+    return 0;
+}
+"use strict";
+function toString4(type) {
+    switch(type){
+        case 1:
+            return "LLQ";
+        case 2:
+            return "UL";
+        case 3:
+            return "NSID";
+        case 5:
+            return "DAU";
+        case 6:
+            return "DHU";
+        case 7:
+            return "N3U";
+        case 8:
+            return "CLIENT_SUBNET";
+        case 9:
+            return "EXPIRE";
+        case 10:
+            return "COOKIE";
+        case 11:
+            return "TCP_KEEPALIVE";
+        case 12:
+            return "PADDING";
+        case 13:
+            return "CHAIN";
+        case 14:
+            return "KEY_TAG";
+        case 26946:
+            return "DEVICEID";
+    }
+    if (type < 0) {
+        return null;
+    }
+    return `OPTION_${type}`;
+}
+function toCode(name) {
+    if (typeof name === "number") {
+        return name;
+    }
+    if (!name) {
+        return -1;
+    }
+    switch(name.toUpperCase()){
+        case "OPTION_0":
+            return 0;
+        case "LLQ":
+            return 1;
+        case "UL":
+            return 2;
+        case "NSID":
+            return 3;
+        case "OPTION_4":
+            return 4;
+        case "DAU":
+            return 5;
+        case "DHU":
+            return 6;
+        case "N3U":
+            return 7;
+        case "CLIENT_SUBNET":
+            return 8;
+        case "EXPIRE":
+            return 9;
+        case "COOKIE":
+            return 10;
+        case "TCP_KEEPALIVE":
+            return 11;
+        case "PADDING":
+            return 12;
+        case "CHAIN":
+            return 13;
+        case "KEY_TAG":
+            return 14;
+        case "DEVICEID":
+            return 26946;
+        case "OPTION_65535":
+            return 65535;
+    }
+    const m = name.match(/_(\d+)$/);
+    if (m) {
+        return parseInt(m[1], 10);
+    }
+    return -1;
+}
+"use strict";
+function toString5(type) {
+    switch(type){
+        case 0:
+            return "mandatory";
+        case 1:
+            return "alpn";
+        case 2:
+            return "no-default-alpn";
+        case 3:
+            return "port";
+        case 4:
+            return "ipv4hint";
+        case 5:
+            return "ech";
+        case 6:
+            return "ipv6hint";
+    }
+    return "key" + type;
+}
+function toKey(name) {
+    switch(name.toLowerCase()){
+        case "mandatory":
+            return 0;
+        case "alpn":
+            return 1;
+        case "no-default-alpn":
+            return 2;
+        case "port":
+            return 3;
+        case "ipv4hint":
+            return 4;
+        case "ech":
+            return 5;
+        case "ipv6hint":
+            return 6;
+    }
+    if (name.toLowerCase().startsWith("key")) return parseInt(name.slice(3));
+    throw "Invalid svcparam key";
+}
+"use strict";
 const ip = {
 };
 ip.toBuffer = function(ip1, buff, offset) {
@@ -3159,10 +3159,10 @@ const FLUSH_MASK = 1 << 15;
 const NOT_FLUSH_MASK = ~FLUSH_MASK;
 const QU_MASK = 1 << 15;
 const NOT_QU_MASK = ~QU_MASK;
-const name5 = {
+const name1 = {
 };
-name5.encode = function(str, buf, offset) {
-    if (!buf) buf = Buffer.allocUnsafe(name5.encodingLength(str));
+name1.encode = function(str, buf, offset) {
+    if (!buf) buf = Buffer.allocUnsafe(name1.encodingLength(str));
     if (!offset) offset = 0;
     const oldOffset = offset;
     const n = str.replace(/^\.|\.$/gm, "");
@@ -3175,27 +3175,27 @@ name5.encode = function(str, buf, offset) {
         }
     }
     buf[offset++] = 0;
-    name5.encode.bytes = offset - oldOffset;
+    name1.encode.bytes = offset - oldOffset;
     return buf;
 };
-name5.encode.bytes = 0;
-name5.decode = function(buf, offset) {
+name1.encode.bytes = 0;
+name1.decode = function(buf, offset) {
     if (!offset) offset = 0;
     const list = [];
     const oldOffset = offset;
     let len = buf[offset++];
     if (len === 0) {
-        name5.decode.bytes = 1;
+        name1.decode.bytes = 1;
         return ".";
     }
     if (len >= 192) {
-        const res = name5.decode(buf, buf.readUInt16BE(offset - 1) - 49152);
-        name5.decode.bytes = 2;
+        const res = name1.decode(buf, buf.readUInt16BE(offset - 1) - 49152);
+        name1.decode.bytes = 2;
         return res;
     }
     while(len){
         if (len >= 192) {
-            list.push(name5.decode(buf, buf.readUInt16BE(offset - 1) - 49152));
+            list.push(name1.decode(buf, buf.readUInt16BE(offset - 1) - 49152));
             offset++;
             break;
         }
@@ -3203,11 +3203,11 @@ name5.decode = function(buf, offset) {
         offset += len;
         len = buf[offset++];
     }
-    name5.decode.bytes = offset - oldOffset;
+    name1.decode.bytes = offset - oldOffset;
     return list.join(".");
 };
-name5.decode.bytes = 0;
-name5.encodingLength = function(n) {
+name1.decode.bytes = 0;
+name1.encodingLength = function(n) {
     if (n === ".") return 1;
     return Buffer.byteLength(n) + 2;
 };
@@ -3304,22 +3304,22 @@ const rns = {
 rns.encode = function(data, buf, offset) {
     if (!buf) buf = Buffer.allocUnsafe(rns.encodingLength(data));
     if (!offset) offset = 0;
-    name5.encode(data, buf, offset + 2);
-    buf.writeUInt16BE(name5.encode.bytes, offset);
-    rns.encode.bytes = name5.encode.bytes + 2;
+    name1.encode(data, buf, offset + 2);
+    buf.writeUInt16BE(name1.encode.bytes, offset);
+    rns.encode.bytes = name1.encode.bytes + 2;
     return buf;
 };
 rns.encode.bytes = 0;
 rns.decode = function(buf, offset) {
     if (!offset) offset = 0;
     const len = buf.readUInt16BE(offset);
-    const dd = name5.decode(buf, offset + 2);
+    const dd = name1.decode(buf, offset + 2);
     rns.decode.bytes = len + 2;
     return dd;
 };
 rns.decode.bytes = 0;
 rns.encodingLength = function(data) {
-    return name5.encodingLength(data) + 2;
+    return name1.encodingLength(data) + 2;
 };
 const rsoa = {
 };
@@ -3328,10 +3328,10 @@ rsoa.encode = function(data, buf, offset) {
     if (!offset) offset = 0;
     const oldOffset = offset;
     offset += 2;
-    name5.encode(data.mname, buf, offset);
-    offset += name5.encode.bytes;
-    name5.encode(data.rname, buf, offset);
-    offset += name5.encode.bytes;
+    name1.encode(data.mname, buf, offset);
+    offset += name1.encode.bytes;
+    name1.encode(data.rname, buf, offset);
+    offset += name1.encode.bytes;
     buf.writeUInt32BE(data.serial || 0, offset);
     offset += 4;
     buf.writeUInt32BE(data.refresh || 0, offset);
@@ -3353,10 +3353,10 @@ rsoa.decode = function(buf, offset) {
     const data = {
     };
     offset += 2;
-    data.mname = name5.decode(buf, offset);
-    offset += name5.decode.bytes;
-    data.rname = name5.decode(buf, offset);
-    offset += name5.decode.bytes;
+    data.mname = name1.decode(buf, offset);
+    offset += name1.decode.bytes;
+    data.rname = name1.decode(buf, offset);
+    offset += name1.decode.bytes;
     data.serial = buf.readUInt32BE(offset);
     offset += 4;
     data.refresh = buf.readUInt32BE(offset);
@@ -3372,7 +3372,7 @@ rsoa.decode = function(buf, offset) {
 };
 rsoa.decode.bytes = 0;
 rsoa.encodingLength = function(data) {
-    return 22 + name5.encodingLength(data.mname) + name5.encodingLength(data.rname);
+    return 22 + name1.encodingLength(data.mname) + name1.encodingLength(data.rname);
 };
 const rtxt = {
 };
@@ -3508,21 +3508,21 @@ const rdname = rptr;
 rptr.encode = function(data, buf, offset) {
     if (!buf) buf = Buffer.allocUnsafe(rptr.encodingLength(data));
     if (!offset) offset = 0;
-    name5.encode(data, buf, offset + 2);
-    buf.writeUInt16BE(name5.encode.bytes, offset);
-    rptr.encode.bytes = name5.encode.bytes + 2;
+    name1.encode(data, buf, offset + 2);
+    buf.writeUInt16BE(name1.encode.bytes, offset);
+    rptr.encode.bytes = name1.encode.bytes + 2;
     return buf;
 };
 rptr.encode.bytes = 0;
 rptr.decode = function(buf, offset) {
     if (!offset) offset = 0;
-    const data = name5.decode(buf, offset + 2);
-    rptr.decode.bytes = name5.decode.bytes + 2;
+    const data = name1.decode(buf, offset + 2);
+    rptr.decode.bytes = name1.decode.bytes + 2;
     return data;
 };
 rptr.decode.bytes = 0;
 rptr.encodingLength = function(data) {
-    return name5.encodingLength(data) + 2;
+    return name1.encodingLength(data) + 2;
 };
 const rsrv = {
 };
@@ -3532,8 +3532,8 @@ rsrv.encode = function(data, buf, offset) {
     buf.writeUInt16BE(data.priority || 0, offset + 2);
     buf.writeUInt16BE(data.weight || 0, offset + 4);
     buf.writeUInt16BE(data.port || 0, offset + 6);
-    name5.encode(data.target, buf, offset + 8);
-    const len = name5.encode.bytes + 6;
+    name1.encode(data.target, buf, offset + 8);
+    const len = name1.encode.bytes + 6;
     buf.writeUInt16BE(len, offset);
     rsrv.encode.bytes = len + 2;
     return buf;
@@ -3547,13 +3547,13 @@ rsrv.decode = function(buf, offset) {
     data.priority = buf.readUInt16BE(offset + 2);
     data.weight = buf.readUInt16BE(offset + 4);
     data.port = buf.readUInt16BE(offset + 6);
-    data.target = name5.decode(buf, offset + 8);
+    data.target = name1.decode(buf, offset + 8);
     rsrv.decode.bytes = len + 2;
     return data;
 };
 rsrv.decode.bytes = 0;
 rsrv.encodingLength = function(data) {
-    return 8 + name5.encodingLength(data.target);
+    return 8 + name1.encodingLength(data.target);
 };
 const rcaa = {
 };
@@ -3606,8 +3606,8 @@ rmx.encode = function(data, buf, offset) {
     offset += 2;
     buf.writeUInt16BE(data.preference || 0, offset);
     offset += 2;
-    name5.encode(data.exchange, buf, offset);
-    offset += name5.encode.bytes;
+    name1.encode(data.exchange, buf, offset);
+    offset += name1.encode.bytes;
     buf.writeUInt16BE(offset - oldOffset - 2, oldOffset);
     rmx.encode.bytes = offset - oldOffset;
     return buf;
@@ -3621,13 +3621,13 @@ rmx.decode = function(buf, offset) {
     offset += 2;
     data.preference = buf.readUInt16BE(offset);
     offset += 2;
-    data.exchange = name5.decode(buf, offset);
-    offset += name5.decode.bytes;
+    data.exchange = name1.decode(buf, offset);
+    offset += name1.decode.bytes;
     rmx.decode.bytes = offset - oldOffset;
     return data;
 };
 rmx.encodingLength = function(data) {
-    return 4 + name5.encodingLength(data.exchange);
+    return 4 + name1.encodingLength(data.exchange);
 };
 const ra = {
 };
@@ -3903,8 +3903,8 @@ rrrsig.encode = function(sig, buf, offset) {
     offset += 4;
     buf.writeUInt16BE(sig.keyTag, offset);
     offset += 2;
-    name5.encode(sig.signersName, buf, offset);
-    offset += name5.encode.bytes;
+    name1.encode(sig.signersName, buf, offset);
+    offset += name1.encode.bytes;
     signature.copy(buf, offset, 0, signature.length);
     offset += signature.length;
     rrrsig.encode.bytes = offset - oldOffset;
@@ -3933,8 +3933,8 @@ rrrsig.decode = function(buf, offset) {
     offset += 4;
     sig.keyTag = buf.readUInt16BE(offset);
     offset += 2;
-    sig.signersName = name5.decode(buf, offset);
-    offset += name5.decode.bytes;
+    sig.signersName = name1.decode(buf, offset);
+    offset += name1.decode.bytes;
     sig.signature = buf.slice(offset, oldOffset + length + 2);
     offset += sig.signature.length;
     rrrsig.decode.bytes = offset - oldOffset;
@@ -3942,7 +3942,7 @@ rrrsig.decode = function(buf, offset) {
 };
 rrrsig.decode.bytes = 0;
 rrrsig.encodingLength = function(sig) {
-    return 20 + name5.encodingLength(sig.signersName) + Buffer.byteLength(sig.signature);
+    return 20 + name1.encodingLength(sig.signersName) + Buffer.byteLength(sig.signature);
 };
 const rrp = {
 };
@@ -3951,10 +3951,10 @@ rrp.encode = function(data, buf, offset) {
     if (!offset) offset = 0;
     const oldOffset = offset;
     offset += 2;
-    name5.encode(data.mbox || ".", buf, offset);
-    offset += name5.encode.bytes;
-    name5.encode(data.txt || ".", buf, offset);
-    offset += name5.encode.bytes;
+    name1.encode(data.mbox || ".", buf, offset);
+    offset += name1.encode.bytes;
+    name1.encode(data.txt || ".", buf, offset);
+    offset += name1.encode.bytes;
     rrp.encode.bytes = offset - oldOffset;
     buf.writeUInt16BE(rrp.encode.bytes - 2, oldOffset);
     return buf;
@@ -3966,16 +3966,16 @@ rrp.decode = function(buf, offset) {
     const data = {
     };
     offset += 2;
-    data.mbox = name5.decode(buf, offset) || ".";
-    offset += name5.decode.bytes;
-    data.txt = name5.decode(buf, offset) || ".";
-    offset += name5.decode.bytes;
+    data.mbox = name1.decode(buf, offset) || ".";
+    offset += name1.decode.bytes;
+    data.txt = name1.decode(buf, offset) || ".";
+    offset += name1.decode.bytes;
     rrp.decode.bytes = offset - oldOffset;
     return data;
 };
 rrp.decode.bytes = 0;
 rrp.encodingLength = function(data) {
-    return 2 + name5.encodingLength(data.mbox || ".") + name5.encodingLength(data.txt || ".");
+    return 2 + name1.encodingLength(data.mbox || ".") + name1.encodingLength(data.txt || ".");
 };
 const typebitmap = {
 };
@@ -4051,8 +4051,8 @@ rnsec.encode = function(record, buf, offset) {
     if (!offset) offset = 0;
     const oldOffset = offset;
     offset += 2;
-    name5.encode(record.nextDomain, buf, offset);
-    offset += name5.encode.bytes;
+    name1.encode(record.nextDomain, buf, offset);
+    offset += name1.encode.bytes;
     typebitmap.encode(record.rrtypes, buf, offset);
     offset += typebitmap.encode.bytes;
     rnsec.encode.bytes = offset - oldOffset;
@@ -4067,8 +4067,8 @@ rnsec.decode = function(buf, offset) {
     };
     var length = buf.readUInt16BE(offset);
     offset += 2;
-    record.nextDomain = name5.decode(buf, offset);
-    offset += name5.decode.bytes;
+    record.nextDomain = name1.decode(buf, offset);
+    offset += name1.decode.bytes;
     record.rrtypes = typebitmap.decode(buf, offset, length - (offset - oldOffset));
     offset += typebitmap.decode.bytes;
     rnsec.decode.bytes = offset - oldOffset;
@@ -4076,7 +4076,7 @@ rnsec.decode = function(buf, offset) {
 };
 rnsec.decode.bytes = 0;
 rnsec.encodingLength = function(record) {
-    return 2 + name5.encodingLength(record.nextDomain) + typebitmap.encodingLength(record.rrtypes);
+    return 2 + name1.encodingLength(record.nextDomain) + typebitmap.encodingLength(record.rrtypes);
 };
 const rnsec3 = {
 };
@@ -4202,8 +4202,8 @@ rhttpsvcb.decode = function(buf, offset) {
     };
     data.svcPriority = buf.readUInt16BE(offset);
     offset += 2;
-    data.targetName = name5.decode(buf, offset);
-    offset += name5.decode.bytes;
+    data.targetName = name1.decode(buf, offset);
+    offset += name1.decode.bytes;
     data.svcParams = {
     };
     let svcKeyDecode;
@@ -4228,8 +4228,8 @@ rhttpsvcb.encode = function(data, buf, offset) {
     offset += 2;
     buf.writeUInt16BE(data.svcPriority, offset);
     offset += 2;
-    name5.encode(data.targetName, buf, offset);
-    offset += name5.encode.bytes;
+    name1.encode(data.targetName, buf, offset);
+    offset += name1.encode.bytes;
     let svcbObj;
     for (let key of Object.keys(data.svcParams)){
         buf.writeUInt16BE(toKey(key), offset);
@@ -4244,7 +4244,7 @@ rhttpsvcb.encode = function(data, buf, offset) {
 };
 rhttpsvcb.encode.bytes = 0;
 rhttpsvcb.encodingLength = function(data) {
-    var encLen = 4 + name5.encodingLength(data.targetName);
+    var encLen = 4 + name1.encodingLength(data.targetName);
     let svcbObj;
     for (let key of Object.keys(data.svcParams)){
         svcbObj = svcbKeyObj(key);
@@ -4563,8 +4563,8 @@ answer.encode = function(a, buf, offset) {
     if (!buf) buf = Buffer.allocUnsafe(answer.encodingLength(a));
     if (!offset) offset = 0;
     const oldOffset = offset;
-    name5.encode(a.name, buf, offset);
-    offset += name5.encode.bytes;
+    name1.encode(a.name, buf, offset);
+    offset += name1.encode.bytes;
     buf.writeUInt16BE(toType(a.type), offset);
     if (a.type.toUpperCase() === "OPT") {
         if (a.name !== ".") {
@@ -4596,8 +4596,8 @@ answer.decode = function(buf, offset) {
     const a = {
     };
     const oldOffset = offset;
-    a.name = name5.decode(buf, offset);
-    offset += name5.decode.bytes;
+    a.name = name1.decode(buf, offset);
+    offset += name1.decode.bytes;
     a.type = toString(buf.readUInt16BE(offset));
     if (a.type === "OPT") {
         a.udpPayloadSize = buf.readUInt16BE(offset + 2);
@@ -4622,7 +4622,7 @@ answer.decode = function(buf, offset) {
 answer.decode.bytes = 0;
 answer.encodingLength = function(a) {
     const data = a.data !== null && a.data !== undefined ? a.data : a.options;
-    return name5.encodingLength(a.name) + 8 + renc(a.type).encodingLength(data);
+    return name1.encodingLength(a.name) + 8 + renc(a.type).encodingLength(data);
 };
 const question = {
 };
@@ -4630,8 +4630,8 @@ question.encode = function(q, buf, offset) {
     if (!buf) buf = Buffer.allocUnsafe(question.encodingLength(q));
     if (!offset) offset = 0;
     const oldOffset = offset;
-    name5.encode(q.name, buf, offset);
-    offset += name5.encode.bytes;
+    name1.encode(q.name, buf, offset);
+    offset += name1.encode.bytes;
     buf.writeUInt16BE(toType(q.type), offset);
     offset += 2;
     buf.writeUInt16BE(toClass(q.class === undefined ? "IN" : q.class), offset);
@@ -4645,8 +4645,8 @@ question.decode = function(buf, offset) {
     const oldOffset = offset;
     const q = {
     };
-    q.name = name5.decode(buf, offset);
-    offset += name5.decode.bytes;
+    q.name = name1.decode(buf, offset);
+    offset += name1.decode.bytes;
     q.type = toString(buf.readUInt16BE(offset));
     offset += 2;
     q.class = toString3(buf.readUInt16BE(offset));
@@ -4658,7 +4658,7 @@ question.decode = function(buf, offset) {
 };
 question.decode.bytes = 0;
 question.encodingLength = function(q) {
-    return name5.encodingLength(q.name) + 4;
+    return name1.encodingLength(q.name) + 4;
 };
 const encode2 = function(result, buf, offset) {
     if (!buf) buf = Buffer.allocUnsafe(encodingLength(result));
@@ -4752,169 +4752,6 @@ class DNSParserWrap {
         } catch (e2) {
             console.error("Error At : DNSParserWrap -> Encode");
             throw e2;
-        }
-    }
-}
-class DNSBlockOperation {
-    checkDomainBlocking(userBlocklistFlagUint, userServiceListUint, flagVersion, blocklistMap, blocklistFilter, domainName) {
-        let response;
-        try {
-            response = checkDomainNameUserFlagIntersection(userBlocklistFlagUint, flagVersion, blocklistMap, blocklistFilter, domainName);
-            if (response.isBlocked) {
-                return response;
-            }
-            if (userServiceListUint) {
-                let dnSplit = domainName.split(".");
-                let dnJoin = "";
-                let wildCardResponse;
-                while(dnSplit.shift() != undefined){
-                    dnJoin = dnSplit.join(".");
-                    wildCardResponse = checkDomainNameUserFlagIntersection(userServiceListUint, flagVersion, blocklistMap, blocklistFilter, dnJoin);
-                    if (wildCardResponse.isBlocked) {
-                        return wildCardResponse;
-                    }
-                }
-            }
-        } catch (e3) {
-            throw e3;
-        }
-        return response;
-    }
-}
-function checkDomainNameUserFlagIntersection(userBlocklistFlagUint, flagVersion, blocklistMap, blocklistFilter, domainName) {
-    let response = {
-    };
-    try {
-        response.isBlocked = false;
-        response.blockedB64Flag = "";
-        response.blockedTag = [];
-        if (blocklistMap.has(domainName)) {
-            let domainNameInBlocklistUint = blocklistMap.get(domainName);
-            let blockedUint = blocklistFilter.flagIntersection(userBlocklistFlagUint, domainNameInBlocklistUint);
-            if (blockedUint) {
-                response.isBlocked = true;
-                response.blockedB64Flag = blocklistFilter.getB64FlagFromUint16(blockedUint, flagVersion);
-            } else {
-                blockedUint = new Uint16Array(domainNameInBlocklistUint);
-                response.blockedB64Flag = blocklistFilter.getB64FlagFromUint16(blockedUint, flagVersion);
-            }
-        }
-    } catch (e4) {
-        throw e4;
-    }
-    return response;
-}
-class DNSBlock {
-    constructor(){
-        this.dnsParser = new DNSParserWrap();
-        this.dnsBlockOperation = new DNSBlockOperation();
-        this.wCache = null;
-    }
-    async RethinkModule(param) {
-        let response = {
-        };
-        response.isException = false;
-        response.exceptionStack = "";
-        response.exceptionFrom = "";
-        response.data = {
-        };
-        response.data.isBlocked = false;
-        response.data.blockedB64Flag = "";
-        try {
-            if (param.userBlocklistInfo.userBlocklistFlagUint.length !== "") {
-                let domainNameBlocklistInfo;
-                if (param.requestDecodedDnsPacket.questions.length >= 1 && (param.requestDecodedDnsPacket.questions[0].type == "A" || param.requestDecodedDnsPacket.questions[0].type == "AAAA" || param.requestDecodedDnsPacket.questions[0].type == "CNAME" || param.requestDecodedDnsPacket.questions[0].type == "HTTPS" || param.requestDecodedDnsPacket.questions[0].type == "SVCB")) {
-                    domainNameBlocklistInfo = param.blocklistFilter.getDomainInfo(param.requestDecodedDnsPacket.questions[0].name);
-                    if (domainNameBlocklistInfo.searchResult) {
-                        response.data = this.dnsBlockOperation.checkDomainBlocking(param.userBlocklistInfo.userBlocklistFlagUint, param.userBlocklistInfo.userServiceListUint, param.userBlocklistInfo.flagVersion, domainNameBlocklistInfo.searchResult, param.blocklistFilter, param.requestDecodedDnsPacket.questions[0].name);
-                        if (response.data.isBlocked && param.isAggCacheReq) {
-                            if (this.wCache === null) {
-                                this.wCache = caches.default;
-                            }
-                            toCacheApi(param, this.wCache, domainNameBlocklistInfo);
-                        }
-                    }
-                }
-            }
-        } catch (e5) {
-            response.isException = true;
-            response.exceptionStack = e5.stack;
-            response.exceptionFrom = "DNSBlock RethinkModule";
-            console.error("Error At : DNSBlock -> RethinkModule");
-            console.error(e5.stack);
-        }
-        return response;
-    }
-}
-function toCacheApi(param, wCache, domainNameBlocklistInfo) {
-    const dn = param.requestDecodedDnsPacket.questions[0].name.trim().toLowerCase() + ":" + param.requestDecodedDnsPacket.questions[0].type;
-    let wCacheUrl = new URL(new URL(param.request.url).origin + "/" + dn);
-    let response = new Response("", {
-        headers: {
-            "x-rethink-metadata": JSON.stringify({
-                ttlEndTime: 0,
-                bodyUsed: false,
-                blocklistInfo: Object.fromEntries(domainNameBlocklistInfo.searchResult)
-            })
-        },
-        cf: {
-            cacheTtl: 604800
-        }
-    });
-    param.event.waitUntil(wCache.put(wCacheUrl, response));
-}
-class DNSResponseBlock {
-    constructor(){
-        this.dnsBlockOperation = new DNSBlockOperation();
-    }
-    async RethinkModule(param) {
-        let response = {
-        };
-        response.isException = false;
-        response.exceptionStack = "";
-        response.exceptionFrom = "";
-        response.data = {
-        };
-        response.data.isBlocked = false;
-        response.data.blockedB64Flag = "";
-        try {
-            if (param.userBlocklistInfo.userBlocklistFlagUint !== "") {
-                if (param.responseDecodedDnsPacket.answers.length > 0 && param.responseDecodedDnsPacket.answers[0].type == "CNAME") {
-                    checkCnameBlock(param, response, this.dnsBlockOperation);
-                } else if (param.responseDecodedDnsPacket.answers.length > 0 && (param.responseDecodedDnsPacket.answers[0].type == "HTTPS" || param.responseDecodedDnsPacket.answers[0].type == "SVCB")) {
-                    checkHttpsSvcbBlock(param, response, this.dnsBlockOperation);
-                }
-            }
-        } catch (e6) {
-            response.isException = true;
-            response.exceptionStack = e6.stack;
-            response.exceptionFrom = "DNSResponseBlock RethinkModule";
-            console.error("Error At : DNSResponseBlock -> RethinkModule");
-            console.error(e6.stack);
-        }
-        return response;
-    }
-}
-function checkHttpsSvcbBlock(param, response, dnsBlockOperation) {
-    let targetName = param.responseDecodedDnsPacket.answers[0].data.targetName.trim().toLowerCase();
-    if (targetName != ".") {
-        let domainNameBlocklistInfo = param.blocklistFilter.getDomainInfo(targetName);
-        if (domainNameBlocklistInfo.searchResult) {
-            response.data = dnsBlockOperation.checkDomainBlocking(param.userBlocklistInfo.userBlocklistFlagUint, param.userBlocklistInfo.userServiceListUint, param.userBlocklistInfo.flagVersion, domainNameBlocklistInfo.searchResult, param.blocklistFilter, targetName);
-        }
-    }
-}
-function checkCnameBlock(param, response, dnsBlockOperation) {
-    let cname = param.responseDecodedDnsPacket.answers[0].data.trim().toLowerCase();
-    let domainNameBlocklistInfo = param.blocklistFilter.getDomainInfo(cname);
-    if (domainNameBlocklistInfo.searchResult) {
-        response.data = dnsBlockOperation.checkDomainBlocking(param.userBlocklistInfo.userBlocklistFlagUint, param.userBlocklistInfo.userServiceListUint, param.userBlocklistInfo.flagVersion, domainNameBlocklistInfo.searchResult, param.blocklistFilter, cname);
-    }
-    if (!response.data.isBlocked) {
-        cname = param.responseDecodedDnsPacket.answers[param.responseDecodedDnsPacket.answers.length - 1].name.trim().toLowerCase();
-        domainNameBlocklistInfo = param.blocklistFilter.getDomainInfo(cname);
-        if (domainNameBlocklistInfo.searchResult) {
-            response.data = dnsBlockOperation.checkDomainBlocking(param.userBlocklistInfo.userBlocklistFlagUint, param.userBlocklistInfo.userServiceListUint, param.userBlocklistInfo.flagVersion, domainNameBlocklistInfo.searchResult, param.blocklistFilter, cname);
         }
     }
 }
@@ -5028,26 +4865,26 @@ class Clock {
 function logd() {
 }
 class LfuCache {
-    constructor(id1, capacity){
-        this.id = id1;
+    constructor(id, capacity){
+        this.id = id;
         this.cache = new Clock(capacity);
     }
     Get(key) {
         let val = false;
         try {
             val = this.cache.val(key) || false;
-        } catch (e7) {
+        } catch (e3) {
             console.log("Error: " + this.id + " -> Get");
-            console.log(e7.stack);
+            console.log(e3.stack);
         }
         return val;
     }
     Put(key, val) {
         try {
             this.cache.put(key, val);
-        } catch (e8) {
+        } catch (e4) {
             console.log("Error: " + this.id + " -> Put");
-            console.log(e8.stack);
+            console.log(e4.stack);
         }
     }
 }
@@ -5061,277 +4898,210 @@ class LocalCache {
     Put(key, data) {
         try {
             this.localCache.Put(key, data);
-        } catch (e9) {
+        } catch (e5) {
             console.error("Error At : LocalCache -> Put");
-            console.error(e9.stack);
+            console.error(e5.stack);
         }
     }
 }
-const flydns6 = "fdaa::3";
-const ttlGraceSec = 30;
-const lfuSize = 2000;
-class DNSResolver {
-    constructor(){
-        this.dnsParser = new DNSParserWrap();
-        this.dnsResCache = false;
-        this.wCache = false;
-    }
-    async RethinkModule(param) {
-        let response = emptyResponse();
+function fromBrowser(req) {
+    if (!req || !req.headers) return false;
+    const ua = req.headers.get("User-Agent");
+    return ua && ua.startsWith("Mozilla/5.0");
+}
+function jsonHeaders(res) {
+    res.headers.set("Content-Type", "application/json");
+}
+function dnsHeaders(res) {
+    res.headers.set("Accept", "application/dns-message");
+    res.headers.set("Content-Type", "application/dns-message");
+}
+function corsHeaders(res) {
+    res.headers.set("Access-Control-Allow-Origin", "*");
+    res.headers.set("Access-Control-Allow-Headers", "*");
+}
+function browserHeaders(res) {
+    jsonHeaders(res);
+    corsHeaders(res);
+}
+function dohHeaders(req, res) {
+    dnsHeaders(res);
+    if (fromBrowser(req)) corsHeaders(res);
+}
+function arrayBufferOf(buf) {
+    const offset = buf.byteOffset;
+    const len = buf.byteLength;
+    return buf.buffer.slice(offset, offset + len);
+}
+function bufferOf(arrayBuf) {
+    return Buffer.from(new Uint8Array(arrayBuf));
+}
+function uid() {
+    return (Math.random() + 1).toString(36).slice(1);
+}
+class DNSBlockOperation {
+    checkDomainBlocking(userBlocklistFlagUint, userServiceListUint, flagVersion, blocklistMap, blocklistFilter, domainName) {
+        let response;
         try {
-            if (!this.dnsResCache) {
-                this.dnsResCache = new LocalCache("dns-response-cache", lfuSize);
-                if (param.runTimeEnv == "worker") {
-                    this.wCache = caches.default;
+            response = checkDomainNameUserFlagIntersection(userBlocklistFlagUint, flagVersion, blocklistMap, blocklistFilter, domainName);
+            if (response.isBlocked) {
+                return response;
+            }
+            if (userServiceListUint) {
+                let dnSplit = domainName.split(".");
+                let dnJoin = "";
+                let wildCardResponse;
+                while(dnSplit.shift() != undefined){
+                    dnJoin = dnSplit.join(".");
+                    wildCardResponse = checkDomainNameUserFlagIntersection(userServiceListUint, flagVersion, blocklistMap, blocklistFilter, dnJoin);
+                    if (wildCardResponse.isBlocked) {
+                        return wildCardResponse;
+                    }
                 }
             }
-            response.data = await this.checkLocalCacheBfrResolve(param);
-        } catch (e10) {
-            response = errResponse(e10);
-            console.error("Error At : DNSResolver -> RethinkModule");
-            console.error(e10.stack);
+        } catch (e6) {
+            throw e6;
         }
         return response;
     }
-    async checkLocalCacheBfrResolve(param) {
-        let resp = {
-        };
-        const dn = (param.requestDecodedDnsPacket.questions.length > 0 ? param.requestDecodedDnsPacket.questions[0].name : "").trim().toLowerCase() + ":" + param.requestDecodedDnsPacket.questions[0].type;
-        const now = Date.now();
-        let cacheRes = this.dnsResCache.Get(dn);
-        console.debug("Local Cache Data", JSON.stringify(cacheRes));
-        if (!cacheRes || now >= cacheRes.ttlEndTime) {
-            cacheRes = await this.checkSecondLevelCacheBfrResolve(param.runTimeEnv, param.request.url, dn, now);
-            console.debug("Cache Api Response", cacheRes);
-            if (!cacheRes) {
-                cacheRes = {
-                };
-                resp.responseBodyBuffer = await this.resolveDnsUpdateCache(param, cacheRes, dn, now);
-                console.debug("resolve update response", JSON.stringify(cacheRes));
-                resp.responseDecodedDnsPacket = cacheRes.decodedDnsPacket;
-                this.dnsResCache.Put(dn, cacheRes);
-                return resp;
-            }
-            this.dnsResCache.Put(dn, cacheRes);
-        }
-        resp.responseDecodedDnsPacket = cacheRes.decodedDnsPacket;
-        resp.responseDecodedDnsPacket.id = param.requestDecodedDnsPacket.id;
-        resp.responseBodyBuffer = this.loadDnsResponseFromCache(cacheRes.decodedDnsPacket, cacheRes.ttlEndTime, now);
-        return resp;
-    }
-    loadDnsResponseFromCache(decodedDnsPacket, end, now) {
-        const outttl = Math.max(Math.floor((end - now) / 1000), 1);
-        for (let answer1 of decodedDnsPacket.answers){
-            answer1.ttl = outttl;
-        }
-        console.debug("ttl", end - now, "res", JSON.stringify(decodedDnsPacket));
-        return this.dnsParser.Encode(decodedDnsPacket);
-    }
-    async checkSecondLevelCacheBfrResolve(runTimeEnv, reqUrl, dn, now) {
-        if (runTimeEnv !== "worker") {
-            return false;
-        }
-        let wCacheUrl = new URL(new URL(reqUrl).origin + "/" + dn);
-        let resp = await this.wCache.match(wCacheUrl);
-        if (resp) {
-            const metaData = JSON.parse(resp.headers.get("x-rethink-metadata"));
-            if (now >= metaData.ttlEndTime) {
-                return false;
-            }
-            let cacheRes = {
-            };
-            cacheRes.decodedDnsPacket = this.dnsParser.Decode(await resp.arrayBuffer());
-            cacheRes.ttlEndTime = metaData.ttlEndTime;
-            return cacheRes;
-        }
-    }
-    async resolveDnsUpdateCache(param, cacheRes, dn, now) {
-        const upRes = await this.resolveDnsUpstream(param.request, param.dnsResolverUrl, param.requestBodyBuffer, param.runTimeEnv);
-        if (!upRes.ok) {
-            console.error("!OK", upRes.status, upRes.statusText, await upRes.text());
-            throw new Error(upRes.status + " http err: " + upRes.statusText);
-        }
-        let responseBodyBuffer = await upRes.arrayBuffer();
-        if (!responseBodyBuffer || responseBodyBuffer.byteLength < 12 + 5) {
-            throw new Error("Null / inadequate response from upstream");
-        }
-        let decodedDnsPacket = (()=>{
-            try {
-                return this.dnsParser.Decode(responseBodyBuffer);
-            } catch (e11) {
-                console.error("decode fail", upRes.status, "cached:", responseBodyBuffer);
-                throw e11;
-            }
-        })();
-        let minttl = 0;
-        for (let answer2 of decodedDnsPacket.answers){
-            minttl = minttl <= 0 || minttl > answer2.ttl ? answer2.ttl : minttl;
-        }
-        minttl = Math.max(minttl + ttlGraceSec, 60);
-        cacheRes.decodedDnsPacket = decodedDnsPacket;
-        cacheRes.ttlEndTime = minttl * 1000 + now;
-        if (param.runTimeEnv == "worker") {
-            let wCacheUrl = new URL(new URL(param.request.url).origin + "/" + dn);
-            let response = new Response(responseBodyBuffer, {
-                headers: {
-                    "Content-Length": responseBodyBuffer.length,
-                    "Content-Type": "application/dns-message",
-                    "x-rethink-metadata": JSON.stringify({
-                        ttlEndTime: cacheRes.ttlEndTime,
-                        bodyUsed: true,
-                        blocklistInfo: convertMapToObject(param.blocklistFilter.getDomainInfo(decodedDnsPacket.questions.length > 0 ? decodedDnsPacket.questions[0].name : "").searchResult)
-                    })
-                },
-                cf: {
-                    cacheTtl: 604800
-                }
-            });
-            param.event.waitUntil(this.wCache.put(wCacheUrl, response));
-        }
-        return responseBodyBuffer;
-    }
 }
-function convertMapToObject(map) {
-    return map ? Object.fromEntries(map) : false;
-}
-DNSResolver.prototype.resolveDnsUpstream = async function(request, resolverUrl, requestBodyBuffer, runTimeEnv) {
+function checkDomainNameUserFlagIntersection(userBlocklistFlagUint, flagVersion, blocklistMap, blocklistFilter, domainName) {
+    let response = {
+    };
     try {
-        let u = new URL(request.url);
-        let dnsResolverUrl = new URL(resolverUrl);
-        u.hostname = dnsResolverUrl.hostname;
-        u.pathname = dnsResolverUrl.pathname;
-        u.port = dnsResolverUrl.port;
-        u.protocol = dnsResolverUrl.protocol;
-        const headers = {
-            Accept: "application/dns-message"
+        response.isBlocked = false;
+        response.blockedB64Flag = "";
+        response.blockedTag = [];
+        if (blocklistMap.has(domainName)) {
+            let domainNameInBlocklistUint = blocklistMap.get(domainName);
+            let blockedUint = blocklistFilter.flagIntersection(userBlocklistFlagUint, domainNameInBlocklistUint);
+            if (blockedUint) {
+                response.isBlocked = true;
+                response.blockedB64Flag = blocklistFilter.getB64FlagFromUint16(blockedUint, flagVersion);
+            } else {
+                blockedUint = new Uint16Array(domainNameInBlocklistUint);
+                response.blockedB64Flag = blocklistFilter.getB64FlagFromUint16(blockedUint, flagVersion);
+            }
+        }
+    } catch (e7) {
+        throw e7;
+    }
+    return response;
+}
+class DNSBlock {
+    constructor(){
+        this.dnsParser = new DNSParserWrap();
+        this.dnsBlockOperation = new DNSBlockOperation();
+        this.wCache = null;
+    }
+    async RethinkModule(param) {
+        let response = {
         };
-        if (runTimeEnv == "node") {
-            const reqHeaders = request.method == "POST" ? {
-                ...headers,
-                "Content-Type": "application/dns-message",
-                "Content-Length": requestBodyBuffer.byteLength
-            } : headers;
-            return await this.resolveH2Dns(u, request.method, requestBodyBuffer, reqHeaders);
-        }
-        let newRequest;
-        if (request.method === "GET" || runTimeEnv == "worker" && request.method === "POST") {
-            u.search = "?dns=" + dnsqurl(requestBodyBuffer);
-            newRequest = new Request(u.href, {
-                method: "GET",
-                headers: headers
-            });
-        } else if (request.method === "POST") {
-            newRequest = new Request(u.href, {
-                method: "POST",
-                headers: {
-                    ...headers,
-                    "Content-Type": "application/dns-message",
-                    "Content-Length": requestBodyBuffer.byteLength
-                },
-                body: requestBodyBuffer
-            });
-        } else {
-            throw new Error("get/post requests only");
-        }
-        return await fetch(newRequest);
-    } catch (e12) {
-        throw e12;
-    }
-};
-function emptyResponse() {
-    return {
-        isException: false,
-        exceptionStack: "",
-        exceptionFrom: "",
-        data: {
-            responseDecodedDnsPacket: null,
-            responseBodyBuffer: null
-        }
-    };
-}
-function errResponse(e13) {
-    return {
-        isException: true,
-        exceptionStack: e13.stack,
-        exceptionFrom: "DNSResolver RethinkModule",
-        data: false
-    };
-}
-DNSResolver.prototype.resolvePlainDns = async function(q) {
-    if (!this.udpCreateSocket) this.udpCreateSocket = (await import("dgram")).createSocket;
-    const createSocket = this.udpCreateSocket;
-    const bq = Buffer.from(q);
-    function lookup(resolve, reject) {
-        const client = createSocket("udp6");
-        client.on("message", (b, addrinfo)=>{
-            const res = new Response(arrayBufferOf(b));
-            resolve(res);
-        });
-        client.on("error", (err)=>{
-            if (err) {
-                console.error("plaindns recv fail", err);
-                reject(err.message);
+        response.isException = false;
+        response.exceptionStack = "";
+        response.exceptionFrom = "";
+        response.data = {
+        };
+        response.data.isBlocked = false;
+        response.data.blockedB64Flag = "";
+        try {
+            if (param.userBlocklistInfo.userBlocklistFlagUint.length !== "") {
+                let domainNameBlocklistInfo;
+                if (param.requestDecodedDnsPacket.questions.length >= 1 && (param.requestDecodedDnsPacket.questions[0].type == "A" || param.requestDecodedDnsPacket.questions[0].type == "AAAA" || param.requestDecodedDnsPacket.questions[0].type == "CNAME" || param.requestDecodedDnsPacket.questions[0].type == "HTTPS" || param.requestDecodedDnsPacket.questions[0].type == "SVCB")) {
+                    domainNameBlocklistInfo = param.blocklistFilter.getDomainInfo(param.requestDecodedDnsPacket.questions[0].name);
+                    if (domainNameBlocklistInfo.searchResult) {
+                        response.data = this.dnsBlockOperation.checkDomainBlocking(param.userBlocklistInfo.userBlocklistFlagUint, param.userBlocklistInfo.userServiceListUint, param.userBlocklistInfo.flagVersion, domainNameBlocklistInfo.searchResult, param.blocklistFilter, param.requestDecodedDnsPacket.questions[0].name);
+                        if (response.data.isBlocked && param.isAggCacheReq) {
+                            if (this.wCache === null) {
+                                this.wCache = caches.default;
+                            }
+                            toCacheApi(param, this.wCache, domainNameBlocklistInfo);
+                        }
+                    }
+                }
             }
-        });
-        client.send(bq, 53, flydns6, (err)=>{
-            if (err) {
-                console.error("plaindns send fail", err);
-                reject(err.message);
-            }
-        });
+        } catch (e8) {
+            response.isException = true;
+            response.exceptionStack = e8.stack;
+            response.exceptionFrom = "DNSBlock RethinkModule";
+            console.error("Error At : DNSBlock -> RethinkModule");
+            console.error(e8.stack);
+        }
+        return response;
     }
-    return new Promise(lookup);
-};
-function dnsqurl(dnsq) {
-    return btoa(String.fromCharCode(...new Uint8Array(dnsq))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }
-function arrayBufferOf(buf) {
-    const ab = new ArrayBuffer(buf.length);
-    const view = new Uint8Array(ab);
-    for(let i29 = 0; i29 < buf.length; i29++){
-        view[i29] = buf[i29];
-    }
-    return ab;
-}
-DNSResolver.prototype.resolveH2Dns = async function(u, method, requestBodyBuffer, headers1) {
-    if (!this.http2) this.http2 = await import("http2");
-    const http2 = this.http2;
-    return new Promise((resolve, reject)=>{
-        const c = http2.connect(u.protocol + "//" + u.host);
-        const reqB = Buffer.from(requestBodyBuffer);
-        const req = c.request({
-            [http2.constants.HTTP2_HEADER_METHOD]: method,
-            [http2.constants.HTTP2_HEADER_PATH]: `${u.pathname}`,
-            ...headers1
-        });
-        req.end(reqB);
-        req.on("response", (headers)=>{
-            const resBuffers = [];
-            const resH = {
-            };
-            for(const k in headers){
-                if (k.startsWith(":")) resH[k.slice(1)] = headers[k];
-                else resH[k] = headers[k];
-            }
-            req.on("data", (chunk)=>{
-                resBuffers.push(chunk);
-            });
-            req.on("end", ()=>{
-                const resB = Buffer.concat(resBuffers);
-                c.close();
-                resolve(new Response(resB, resH));
-            });
-            req.on("error", (err)=>{
-                console.error("h2 upstream resolver err => ", err);
-                reject(err);
-            });
-        });
-        c.on("error", (err)=>{
-            console.error("h2 upstream resolver err => ", err);
-            reject(err);
-        });
+function toCacheApi(param, wCache, domainNameBlocklistInfo) {
+    const dn = param.requestDecodedDnsPacket.questions[0].name.trim().toLowerCase() + ":" + param.requestDecodedDnsPacket.questions[0].type;
+    let wCacheUrl = new URL(new URL(param.request.url).origin + "/" + dn);
+    let response = new Response("", {
+        headers: {
+            "x-rethink-metadata": JSON.stringify({
+                ttlEndTime: 0,
+                bodyUsed: false,
+                blocklistInfo: Object.fromEntries(domainNameBlocklistInfo.searchResult)
+            })
+        },
+        cf: {
+            cacheTtl: 604800
+        }
     });
-};
+    param.event.waitUntil(wCache.put(wCacheUrl, response));
+}
+class DNSResponseBlock {
+    constructor(){
+        this.dnsBlockOperation = new DNSBlockOperation();
+    }
+    async RethinkModule(param) {
+        let response = {
+        };
+        response.isException = false;
+        response.exceptionStack = "";
+        response.exceptionFrom = "";
+        response.data = {
+        };
+        response.data.isBlocked = false;
+        response.data.blockedB64Flag = "";
+        try {
+            if (param.userBlocklistInfo.userBlocklistFlagUint !== "") {
+                if (param.responseDecodedDnsPacket.answers.length > 0 && param.responseDecodedDnsPacket.answers[0].type == "CNAME") {
+                    checkCnameBlock(param, response, this.dnsBlockOperation);
+                } else if (param.responseDecodedDnsPacket.answers.length > 0 && (param.responseDecodedDnsPacket.answers[0].type == "HTTPS" || param.responseDecodedDnsPacket.answers[0].type == "SVCB")) {
+                    checkHttpsSvcbBlock(param, response, this.dnsBlockOperation);
+                }
+            }
+        } catch (e9) {
+            response.isException = true;
+            response.exceptionStack = e9.stack;
+            response.exceptionFrom = "DNSResponseBlock RethinkModule";
+            console.error("Error At : DNSResponseBlock -> RethinkModule");
+            console.error(e9.stack);
+        }
+        return response;
+    }
+}
+function checkHttpsSvcbBlock(param, response, dnsBlockOperation) {
+    let targetName = param.responseDecodedDnsPacket.answers[0].data.targetName.trim().toLowerCase();
+    if (targetName != ".") {
+        let domainNameBlocklistInfo = param.blocklistFilter.getDomainInfo(targetName);
+        if (domainNameBlocklistInfo.searchResult) {
+            response.data = dnsBlockOperation.checkDomainBlocking(param.userBlocklistInfo.userBlocklistFlagUint, param.userBlocklistInfo.userServiceListUint, param.userBlocklistInfo.flagVersion, domainNameBlocklistInfo.searchResult, param.blocklistFilter, targetName);
+        }
+    }
+}
+function checkCnameBlock(param, response, dnsBlockOperation) {
+    let cname = param.responseDecodedDnsPacket.answers[0].data.trim().toLowerCase();
+    let domainNameBlocklistInfo = param.blocklistFilter.getDomainInfo(cname);
+    if (domainNameBlocklistInfo.searchResult) {
+        response.data = dnsBlockOperation.checkDomainBlocking(param.userBlocklistInfo.userBlocklistFlagUint, param.userBlocklistInfo.userServiceListUint, param.userBlocklistInfo.flagVersion, domainNameBlocklistInfo.searchResult, param.blocklistFilter, cname);
+    }
+    if (!response.data.isBlocked) {
+        cname = param.responseDecodedDnsPacket.answers[param.responseDecodedDnsPacket.answers.length - 1].name.trim().toLowerCase();
+        domainNameBlocklistInfo = param.blocklistFilter.getDomainInfo(cname);
+        if (domainNameBlocklistInfo.searchResult) {
+            response.data = dnsBlockOperation.checkDomainBlocking(param.userBlocklistInfo.userBlocklistFlagUint, param.userBlocklistInfo.userServiceListUint, param.userBlocklistInfo.flagVersion, domainNameBlocklistInfo.searchResult, param.blocklistFilter, cname);
+        }
+    }
+}
 const BASE64 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_";
 const config1 = {
     useBinarySearch: true,
@@ -5458,11 +5228,11 @@ BitString.prototype = {
         return this.bytes;
     },
     encode: function(n) {
-        const e14 = [];
+        const e10 = [];
         for(let i3 = 0; i3 < this.length; i3 += n){
-            e14.push(this.get(i3, Math.min(this.length, n)));
+            e10.push(this.get(i3, Math.min(this.length, n)));
         }
-        return e14;
+        return e10;
     },
     get: function(p, n, debug = false) {
         if (p % W + n <= W) {
@@ -5953,8 +5723,8 @@ function createBlocklistFilter(tdbuf, rdbuf, blocklistFileTag, blocklistBasicCon
             t: tags,
             ft: frozentrie
         };
-    } catch (e15) {
-        throw e15;
+    } catch (e11) {
+        throw e11;
     }
 }
 const ALPHA32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -5973,8 +5743,8 @@ function rbase32(input) {
     let value = 0;
     let index = 0;
     let output = new Uint8Array(length * 5 / 8 | 0);
-    for(var i30 = 0; i30 < length; i30++){
-        value = value << 5 | readChar(input[i30]);
+    for(var i29 = 0; i29 < length; i29++){
+        value = value << 5 | readChar(input[i29]);
         bits += 5;
         if (bits >= 8) {
             output[index++] = value >>> bits - 8 & 255;
@@ -6074,8 +5844,8 @@ class BlocklistFilter {
                 intersectFlag[count++] = bodyData;
             }
             return intersectFlag;
-        } catch (e16) {
-            throw e16;
+        } catch (e12) {
+            throw e12;
         }
     }
     customTagToFlag(tagList) {
@@ -6088,8 +5858,8 @@ class BlocklistFilter {
             } else if (flagVersion == "1") {
                 return "1:" + encodeURI(btoa(encodeToBinary(customTagToFlag(tagList, this.blocklistFileTag))).replace(/\//g, "_").replace(/\+/g, "-"));
             }
-        } catch (e17) {
-            throw e17;
+        } catch (e13) {
+            throw e13;
         }
     }
     getB64FlagFromUint16(arr, flagVersion) {
@@ -6099,8 +5869,8 @@ class BlocklistFilter {
             } else if (flagVersion == "1") {
                 return "1:" + encodeURI(btoa(encodeUint16arrToBinary(arr)).replace(/\//g, "_").replace(/\+/g, "-"));
             }
-        } catch (e18) {
-            throw e18;
+        } catch (e14) {
+            throw e14;
         }
     }
 }
@@ -6109,8 +5879,8 @@ function encodeUint16arrToBinary(uint16Arr) {
 }
 function encodeToBinary(s) {
     const codeUnits = new Uint16Array(s.length);
-    for(let i31 = 0; i31 < codeUnits.length; i31++){
-        codeUnits[i31] = s.charCodeAt(i31);
+    for(let i30 = 0; i30 < codeUnits.length; i30++){
+        codeUnits[i30] = s.charCodeAt(i30);
     }
     return String.fromCharCode(...new Uint8Array(codeUnits.buffer));
 }
@@ -6151,16 +5921,16 @@ function toUint(flag) {
         response.flagVersion = v;
         response.userBlocklistFlagUint = convertor(f) || "";
         return response;
-    } catch (e19) {
-        throw e19;
+    } catch (e15) {
+        throw e15;
     }
 }
 function Base64ToUint(b64Flag) {
     const buff = Buffer.from(decodeURIComponent(b64Flag), "base64");
     const str = buff.toString("utf-8");
     const uint = [];
-    for(let i32 = 0; i32 < str.length; i32++){
-        uint[i32] = str.charCodeAt(i32);
+    for(let i31 = 0; i31 < str.length; i31++){
+        uint[i31] = str.charCodeAt(i31);
     }
     return uint;
 }
@@ -6168,8 +5938,8 @@ function Base64ToUint_v1(b64Flag) {
     let str = decodeURI(b64Flag);
     str = decodeFromBinary(atob(str.replace(/_/g, "/").replace(/-/g, "+")));
     const uint = [];
-    for(let i33 = 0; i33 < str.length; i33++){
-        uint[i33] = str.charCodeAt(i33);
+    for(let i32 = 0; i32 < str.length; i32++){
+        uint[i32] = str.charCodeAt(i32);
     }
     return uint;
 }
@@ -6177,16 +5947,16 @@ function Base32ToUint_v1(flag) {
     let str = decodeURI(flag);
     str = decodeFromBinaryArray(rbase32(str));
     const uint = [];
-    for(let i34 = 0; i34 < str.length; i34++){
-        uint[i34] = str.charCodeAt(i34);
+    for(let i33 = 0; i33 < str.length; i33++){
+        uint[i33] = str.charCodeAt(i33);
     }
     return uint;
 }
 function decodeFromBinary(b, u8) {
     if (u8) return String.fromCharCode(...new Uint16Array(b.buffer));
     const bytes = new Uint8Array(b.length);
-    for(let i35 = 0; i35 < bytes.length; i35++){
-        bytes[i35] = b.charCodeAt(i35);
+    for(let i34 = 0; i34 < bytes.length; i34++){
+        bytes[i34] = b.charCodeAt(i34);
     }
     return String.fromCharCode(...new Uint16Array(bytes.buffer));
 }
@@ -6234,12 +6004,11 @@ class BlocklistWrapper {
                 response.exceptionStack = this.exceptionStack ? this.exceptionStack : "Problem in loading blocklistFilter - Waiting Timeout";
                 response.exceptionFrom = this.exceptionFrom ? this.exceptionFrom : "blocklistWrapper.js RethinkModule";
             }
-        } catch (e20) {
+        } catch (e16) {
             response.isException = true;
-            response.exceptionStack = e20.stack;
+            response.exceptionStack = e16.stack;
             response.exceptionFrom = "blocklistWrapper.js RethinkModule";
-            console.error("Error At -> BlocklistWrapper RethinkModule");
-            console.error(e20.stack);
+            log.e("Error At -> BlocklistWrapper RethinkModule", e16);
         }
         return response;
     }
@@ -6256,22 +6025,17 @@ class BlocklistWrapper {
         try {
             let bl = await downloadBuildBlocklist(blocklistUrl, latestTimestamp, tdNodecount, tdParts);
             this.blocklistFilter.loadFilter(bl.t, bl.ft, bl.blocklistBasicConfig, bl.blocklistFileTag);
-            if (console.level == "debug") {
-                console.debug("done blocklist filter");
-                let result = this.blocklistFilter.getDomainInfo("google.com");
-                console.debug(JSON.stringify(result));
-                console.debug(JSON.stringify(result.searchResult.get("google.com")));
-            }
+            log.d("done blocklist filter");
             this.isBlocklistUnderConstruction = false;
             response.data.blocklistFilter = this.blocklistFilter;
-        } catch (e21) {
+        } catch (e17) {
             this.isBlocklistUnderConstruction = false;
             response.isException = true;
-            response.exceptionStack = e21.stack;
+            response.exceptionStack = e17.stack;
             response.exceptionFrom = "blocklistWrapper.js initBlocklistConstruction";
             this.exceptionFrom = response.exceptionFrom;
             this.exceptionStack = response.exceptionStack;
-            console.error(e21.stack);
+            log.e(e17);
         }
         return response;
     }
@@ -6285,7 +6049,7 @@ async function downloadBuildBlocklist(blocklistUrl, latestTimestamp, tdNodecount
             nodecount: tdNodecount || -1,
             tdparts: tdParts || -1
         };
-        tdNodecount == null && console.error("tdNodecount missing! Blocking won't work");
+        tdNodecount == null && log.e("tdNodecount missing!");
         const buf0 = fileFetch(baseurl + "/filetag.json", "json");
         const buf1 = makeTd(baseurl, blocklistBasicConfig.tdparts);
         const buf2 = fileFetch(baseurl + "/rd.txt", "buffer");
@@ -6294,23 +6058,22 @@ async function downloadBuildBlocklist(blocklistUrl, latestTimestamp, tdNodecount
             buf1,
             buf2
         ]);
-        console.debug("call createBlocklistFilter");
-        console.debug(blocklistBasicConfig);
+        log.d("call createBlocklistFilter", blocklistBasicConfig);
         let trie = createBlocklistFilter(downloads[1], downloads[2], downloads[0], blocklistBasicConfig);
         resp.t = trie.t;
         resp.ft = trie.ft;
         resp.blocklistBasicConfig = blocklistBasicConfig;
         resp.blocklistFileTag = downloads[0];
         return resp;
-    } catch (e22) {
-        throw e22;
+    } catch (e18) {
+        throw e18;
     }
 }
 async function fileFetch(url, typ) {
     if (typ !== "buffer" && typ !== "json") {
         throw new Error("Unknown conversion type at fileFetch");
     }
-    console.debug("Start Downloading : " + url);
+    log.d("Start Downloading : " + url);
     const res = await fetch(url, {
         cf: {
             cacheTtl: 1209600
@@ -6323,7 +6086,7 @@ async function fileFetch(url, typ) {
             return await res.json();
         }
     } else {
-        console.error(url, res);
+        log.e(url, res);
         throw new Error(JSON.stringify([
             url,
             res,
@@ -6337,20 +6100,20 @@ const sleep = (ms)=>{
     });
 };
 async function makeTd(baseurl, n) {
-    console.debug("Make Td Starts : Tdparts -> " + n);
+    log.d("Make Td Starts : Tdparts -> " + n);
     if (n <= -1) {
         return fileFetch(baseurl + "/td.txt", "buffer");
     }
     const tdpromises = [];
-    for(let i36 = 0; i36 <= n; i36++){
-        const f = baseurl + "/td" + i36.toLocaleString("en-US", {
+    for(let i35 = 0; i35 <= n; i35++){
+        const f = baseurl + "/td" + i35.toLocaleString("en-US", {
             minimumIntegerDigits: 2,
             useGrouping: false
         }) + ".txt";
         tdpromises.push(fileFetch(f, "buffer"));
     }
     const tds = await Promise.all(tdpromises);
-    console.debug("all td download successful");
+    log.d("tds downloaded");
     return new Promise((resolve, reject)=>{
         resolve(concat(tds));
     });
@@ -6387,12 +6150,12 @@ class DNSAggCache {
                 return response;
             }
             response.data = await this.aggCache(param);
-        } catch (e23) {
+        } catch (e19) {
             response.isException = true;
-            response.exceptionStack = e23.stack;
+            response.exceptionStack = e19.stack;
             response.exceptionFrom = "DNSAggCache RethinkModule";
             console.error("Error At : DNSAggCache -> RethinkModule");
-            console.error(e23.stack);
+            console.error(e19.stack);
         }
         return response;
     }
@@ -6442,8 +6205,8 @@ async function parseCacheapiResponse(cacheResponse, dnsParser, dnsBlockOperation
             response.type = "response";
             response.data.decodedDnsPacket = dnsParser.Decode(await cacheResponse.arrayBuffer());
             const outttl = Math.max(Math.floor((metaData.ttlEndTime - now) / 1000), 1);
-            for (let answer3 of response.data.decodedDnsPacket.answers){
-                answer3.ttl = outttl;
+            for (let answer1 of response.data.decodedDnsPacket.answers){
+                answer1.ttl = outttl;
             }
             response.data.bodyBuffer = dnsParser.Encode(response.data.decodedDnsPacket);
         }
@@ -6454,103 +6217,277 @@ async function getCacheapi(wCache, reqUrl, key) {
     let wCacheUrl = new URL(new URL(reqUrl).origin + "/" + key);
     return await wCache.match(wCacheUrl);
 }
-function globalConsoleLevel(level) {
-    level = level.toLowerCase().trim();
-    if (console.level) throw new Error("Log level already configured");
-    switch(level){
-        case "error":
-            globalThis.console.warn = ()=>null
-            ;
-        case "warn":
-            globalThis.console.info = ()=>null
-            ;
-        case "info":
-            globalThis.console.time = ()=>null
-            ;
-            globalThis.console.timeEnd = ()=>null
-            ;
-            globalThis.console.timeLog = ()=>null
-            ;
-        case "timer":
-            globalThis.console.debug = ()=>null
-            ;
-        case "debug":
-            break;
-        default:
-            console.error("Unknown log level", level);
-            level = null;
+const quad1 = "1.1.1.2";
+const ttlGraceSec = 30;
+const dnsCacheSize = 10000;
+class DNSResolver {
+    constructor(){
+        this.dnsParser = new DNSParserWrap();
+        this.dnsResCache = false;
+        this.wCache = false;
+        this.http2 = null;
+        this.transport = null;
     }
-    if (level) {
-        console.log("Global Log level set to :", level);
-        globalThis.console.level = level;
-    }
-    return level;
-}
-class Log {
-    constructor(level){
-        this.logLevels = [
-            "error",
-            "warn",
-            "info",
-            "timer",
-            "debug"
-        ];
-        this.setLevel(level);
-    }
-    resetLevel() {
-        this.l = console.log;
-        this.d = ()=>null
-        ;
-        this.lapTime = ()=>null
-        ;
-        this.startTime = ()=>null
-        ;
-        this.endTime = ()=>null
-        ;
-        this.i = ()=>null
-        ;
-        this.w = ()=>null
-        ;
-        this.e = ()=>null
-        ;
-    }
-    setLevel(level) {
-        this.resetLevel();
-        switch(level){
-            default:
-            case "debug":
-                this.d = console.debug;
-            case "timer":
-                this.lapTime = console.timeLog;
-                this.startTime = function(name) {
-                    name += id();
-                    console.time(name);
-                    return name;
-                };
-                this.endTime = console.timeEnd;
-            case "info":
-                this.i = console.info;
-            case "warn":
-                this.w = console.warn;
-            case "error":
-                this.e = console.error;
+    async RethinkModule(param) {
+        let response = emptyResponse();
+        try {
+            if (!this.dnsResCache) {
+                this.dnsResCache = new LocalCache("dns-response-cache", dnsCacheSize);
+                if (isWorkers()) {
+                    this.wCache = caches.default;
+                }
+            }
+            response.data = await this.checkLocalCacheBfrResolve(param);
+        } catch (e20) {
+            response = errResponse(e20);
+            log.e("Error At : DNSResolver -> RethinkModule", e20);
         }
-        if (this.logLevels.indexOf(level) < 0) this.logLevel = "debug";
-        else this.logLevel = level;
+        return response;
+    }
+    async checkLocalCacheBfrResolve(param) {
+        let resp = {
+        };
+        const dn = (param.requestDecodedDnsPacket.questions.length > 0 ? param.requestDecodedDnsPacket.questions[0].name : "").trim().toLowerCase() + ":" + param.requestDecodedDnsPacket.questions[0].type;
+        const now = Date.now();
+        let cacheRes = this.dnsResCache.Get(dn);
+        log.d("Local Cache Data", JSON.stringify(cacheRes));
+        if (!cacheRes || now >= cacheRes.ttlEndTime) {
+            cacheRes = await this.checkSecondLevelCacheBfrResolve(param.runTimeEnv, param.request.url, dn, now);
+            log.d("CacheApi response", cacheRes);
+            if (!cacheRes) {
+                cacheRes = {
+                };
+                resp.responseBodyBuffer = await this.resolveDnsUpdateCache(param, cacheRes, dn, now);
+                log.d("resolver response", JSON.stringify(cacheRes));
+                resp.responseDecodedDnsPacket = cacheRes.decodedDnsPacket;
+                this.dnsResCache.Put(dn, cacheRes);
+                return resp;
+            }
+            this.dnsResCache.Put(dn, cacheRes);
+        }
+        resp.responseDecodedDnsPacket = cacheRes.decodedDnsPacket;
+        resp.responseDecodedDnsPacket.id = param.requestDecodedDnsPacket.id;
+        resp.responseBodyBuffer = this.loadDnsResponseFromCache(cacheRes.decodedDnsPacket, cacheRes.ttlEndTime, now);
+        return resp;
+    }
+    loadDnsResponseFromCache(decodedDnsPacket, end, now) {
+        const outttl = Math.max(Math.floor((end - now) / 1000), 1);
+        for (let answer2 of decodedDnsPacket.answers){
+            answer2.ttl = outttl;
+        }
+        log.d("ttl", end - now, "res", JSON.stringify(decodedDnsPacket));
+        return this.dnsParser.Encode(decodedDnsPacket);
+    }
+    async checkSecondLevelCacheBfrResolve(runTimeEnv, reqUrl, dn, now) {
+        if (!isWorkers()) return false;
+        let wCacheUrl = new URL(new URL(reqUrl).origin + "/" + dn);
+        let resp = await this.wCache.match(wCacheUrl);
+        if (resp) {
+            const metaData = JSON.parse(resp.headers.get("x-rethink-metadata"));
+            if (now >= metaData.ttlEndTime) {
+                return false;
+            }
+            let cacheRes = {
+            };
+            cacheRes.decodedDnsPacket = this.dnsParser.Decode(await resp.arrayBuffer());
+            cacheRes.ttlEndTime = metaData.ttlEndTime;
+            return cacheRes;
+        }
+    }
+    async resolveDnsUpdateCache(param, cacheRes, dn, now) {
+        const upRes = await this.resolveDnsUpstream(param.request, param.dnsResolverUrl, param.requestBodyBuffer);
+        if (!upRes) throw new Error("no upstream result");
+        if (!upRes.ok) {
+            log.d("!OK", upRes.status, upRes.statusText, await upRes.text());
+            throw new Error(upRes.status + " http err: " + upRes.statusText);
+        }
+        let responseBodyBuffer = await upRes.arrayBuffer();
+        if (!responseBodyBuffer || responseBodyBuffer.byteLength < 12 + 5) {
+            throw new Error("Null / inadequate response from upstream");
+        }
+        let decodedDnsPacket = (()=>{
+            try {
+                return this.dnsParser.Decode(responseBodyBuffer);
+            } catch (e21) {
+                log.e("decode fail " + upRes.status + " cache? " + responseBodyBuffer);
+                throw e21;
+            }
+        })();
+        let minttl = 0;
+        for (let answer3 of decodedDnsPacket.answers){
+            minttl = minttl <= 0 || minttl > answer3.ttl ? answer3.ttl : minttl;
+        }
+        minttl = Math.max(minttl + ttlGraceSec, 60);
+        cacheRes.decodedDnsPacket = decodedDnsPacket;
+        cacheRes.ttlEndTime = minttl * 1000 + now;
+        if (isWorkers()) {
+            let wCacheUrl = new URL(new URL(param.request.url).origin + "/" + dn);
+            let response = new Response(responseBodyBuffer, {
+                headers: {
+                    "Content-Length": responseBodyBuffer.length,
+                    "x-rethink-metadata": JSON.stringify(cacheMetadata(cacheRes, param.blocklistFilter))
+                },
+                cf: {
+                    cacheTtl: 604800
+                }
+            });
+            dnsHeaders(response);
+            param.event.waitUntil(this.wCache.put(wCacheUrl, response));
+        }
+        return responseBodyBuffer;
     }
 }
-function id() {
-    return (Math.random() + 1).toString(36).slice(1);
-}
+const minDNSPacketSize = 12 + 5;
 const dns = new DNSParserWrap();
 const servfail = dns.Encode({
     type: "response",
     flags: 4098
 });
-const mod = {
-    servfail: servfail
+function truncated(ans) {
+    if (ans.length < 12) return false;
+    const flags = ans.readUInt16BE(2);
+    const tc = flags >> 9 & 1;
+    return tc === 1;
+}
+const mod = function() {
+    return {
+        dnsHeaderSize: 2,
+        minDNSPacketSize: minDNSPacketSize,
+        maxDNSPacketSize: 4096,
+        servfail: servfail,
+        truncated: truncated
+    };
+}();
+function cacheMetadata(cacheRes, blocklistFilter) {
+    const question1 = cacheRes.decodedDnsPacket.questions.length > 0 ? cacheRes.decodedDnsPacket.questions[0].name : "";
+    return {
+        ttlEndTime: cacheRes.ttlEndTime,
+        bodyUsed: true,
+        blocklistInfo: objOf(blocklistFilter.getDomainInfo(question1).searchResult)
+    };
+}
+DNSResolver.prototype.resolveDnsUpstream = async function(request, resolverUrl, requestBodyBuffer) {
+    try {
+        if (isNode() && onFly()) {
+            if (!this.transport) this.transport = new "../helpers/dns/transport.js".Transport(quad1, 53);
+            const q = bufferOf(requestBodyBuffer);
+            let ans = await this.transport.udpquery(q);
+            if (ans && truncated(ans)) {
+                log.w("ans truncated, retrying over tcp");
+                ans = await this.transport.tcpquery(q);
+            }
+            return ans ? new Response(arrayBufferOf(ans)) : new Response(null, {
+                status: 503
+            });
+        }
+        let u = new URL(request.url);
+        let dnsResolverUrl = new URL(resolverUrl);
+        u.hostname = dnsResolverUrl.hostname;
+        u.pathname = dnsResolverUrl.pathname;
+        u.port = dnsResolverUrl.port;
+        u.protocol = dnsResolverUrl.protocol;
+        let newRequest = null;
+        if (request.method === "GET" || isWorkers() && request.method === "POST") {
+            u.search = "?dns=" + dnsqurl(requestBodyBuffer);
+            newRequest = new Request(u.href, {
+                method: "GET"
+            });
+        } else if (request.method === "POST") {
+            newRequest = new Request(u.href, {
+                method: "POST",
+                headers: {
+                    "Content-Length": requestBodyBuffer.byteLength
+                },
+                body: requestBodyBuffer
+            });
+        } else {
+            throw new Error("get/post requests only");
+        }
+        dnsHeaders(newRequest);
+        return isNode() ? this.doh2(newRequest) : fetch(newRequest);
+    } catch (e22) {
+        throw e22;
+    }
 };
-const log = new Log();
+DNSResolver.prototype.doh2 = async function(request) {
+    console.debug("upstream using h2");
+    if (!this.http2) this.http2 = await import("http2");
+    const http2 = this.http2;
+    const u = new URL(request.url);
+    const reqB = bufferOf(await request.arrayBuffer());
+    const headers1 = {
+    };
+    request.headers.forEach((v, k)=>{
+        headers1[k] = v;
+    });
+    return new Promise((resolve, reject)=>{
+        const authority = u.origin;
+        const c = http2.connect(authority);
+        c.on("error", (err)=>{
+            reject(err.message);
+        });
+        const req = c.request({
+            [http2.constants.HTTP2_HEADER_METHOD]: request.method,
+            [http2.constants.HTTP2_HEADER_PATH]: `${u.pathname}`,
+            ...headers1
+        });
+        req.on("response", (headers)=>{
+            const resBuffers = [];
+            const resH = {
+            };
+            for(const k in headers){
+                if (k.startsWith(":")) resH[k.slice(1)] = headers[k];
+                else resH[k] = headers[k];
+            }
+            req.on("data", (chunk)=>{
+                resBuffers.push(chunk);
+            });
+            req.on("end", ()=>{
+                const resB = Buffer.concat(resBuffers);
+                c.close();
+                resolve(new Response(resB, resH));
+            });
+            req.on("error", (err)=>{
+                reject(err.message);
+            });
+        });
+        req.end(reqB);
+    });
+};
+function emptyResponse() {
+    return {
+        isException: false,
+        exceptionStack: "",
+        exceptionFrom: "",
+        data: {
+            responseDecodedDnsPacket: null,
+            responseBodyBuffer: null
+        }
+    };
+}
+function errResponse(e23) {
+    return {
+        isException: true,
+        exceptionStack: e23.stack,
+        exceptionFrom: "DNSResolver RethinkModule",
+        data: false
+    };
+}
+function dnsqurl(dnsq) {
+    return btoa(String.fromCharCode(...new Uint8Array(dnsq))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+}
+function onFly() {
+    return env.cloudPlatform === "fly";
+}
+function isWorkers() {
+    return env.runTimeEnv === "worker";
+}
+function isNode() {
+    return env.runTimeEnv === "node";
+}
+function objOf(map) {
+    return map ? Object.fromEntries(map) : false;
+}
 class CurrentRequest {
     constructor(){
         this.blockedB64Flag = "";
@@ -6869,7 +6806,6 @@ function getBlocklistFlag(url) {
     }
     return blocklistFlag;
 }
-const log1 = new Log();
 const blocklistWrapper = new BlocklistWrapper();
 const commandControl = new CommandControl();
 const userOperation = new UserOperation();
@@ -6946,24 +6882,24 @@ class RethinkPlugin {
         });
     }
     async executePlugin(req) {
-        const t = log1.startTime("exec-plugin");
+        const t = log.startTime("exec-plugin");
         for (const p of this.plugin){
             if (req.stopProcessing && !p.continueOnStopProcess) {
                 continue;
             }
-            log1.lapTime(t, p.name, "send-req");
+            log.lapTime(t, p.name, "send-req");
             const res = await p.module.RethinkModule(generateParam(this.parameter, p.param));
-            log1.lapTime(t, p.name, "got-res");
+            log.lapTime(t, p.name, "got-res");
             if (p.callBack) {
                 await p.callBack.call(this, res, req);
             }
-            log1.lapTime(t, p.name, "post-callback");
+            log.lapTime(t, p.name, "post-callback");
         }
-        log1.endTime(t);
+        log.endTime(t);
     }
 }
 function blocklistFilterCallBack(response, currentRequest) {
-    log1.d("In blocklistFilterCallBack");
+    log.d("In blocklistFilterCallBack");
     if (response.isException) {
         loadException(response, currentRequest);
     } else {
@@ -6971,14 +6907,14 @@ function blocklistFilterCallBack(response, currentRequest) {
     }
 }
 async function commandControlCallBack(response, currentRequest) {
-    log1.d("In commandControlCallBack", JSON.stringify(response.data));
+    log.d("In commandControlCallBack", JSON.stringify(response.data));
     if (response.data.stopProcessing) {
         currentRequest.httpResponse = response.data.httpResponse;
         currentRequest.stopProcessing = true;
     }
 }
 async function userOperationCallBack(response, currentRequest) {
-    log1.d("In userOperationCallBack", JSON.stringify(response.data));
+    log.d("In userOperationCallBack", JSON.stringify(response.data));
     if (response.isException) {
         loadException(response, currentRequest);
     } else if (!this.parameter.get("isDnsMsg") && this.parameter.get("request").method === "POST") {
@@ -6994,7 +6930,7 @@ async function userOperationCallBack(response, currentRequest) {
     }
 }
 function dnsAggCacheCallBack(response, currentRequest) {
-    log1.d("In dnsAggCacheCallBack", JSON.stringify(response.data));
+    log.d("In dnsAggCacheCallBack", JSON.stringify(response.data));
     if (response.isException) {
         loadException(response, currentRequest);
     } else if (response.data !== null) {
@@ -7015,7 +6951,7 @@ function dnsAggCacheCallBack(response, currentRequest) {
     }
 }
 function dnsBlockCallBack(response, currentRequest) {
-    log1.d("In dnsBlockCallBack", JSON.stringify(response.data));
+    log.d("In dnsBlockCallBack", JSON.stringify(response.data));
     if (response.isException) {
         loadException(response, currentRequest);
     } else {
@@ -7028,7 +6964,7 @@ function dnsBlockCallBack(response, currentRequest) {
     }
 }
 function dnsResolverCallBack(response, currentRequest) {
-    log1.d("In dnsResolverCallBack", JSON.stringify(response.data));
+    log.d("In dnsResolverCallBack", JSON.stringify(response.data));
     if (response.isException) {
         loadException(response, currentRequest);
     } else {
@@ -7038,7 +6974,7 @@ function dnsResolverCallBack(response, currentRequest) {
     }
 }
 function dnsResponseBlockCallBack(response, currentRequest) {
-    log1.d("In dnsResponseBlockCallBack", JSON.stringify(response.data));
+    log.d("In dnsResponseBlockCallBack", JSON.stringify(response.data));
     if (response.isException) {
         loadException(response, currentRequest);
     } else {
@@ -7054,7 +6990,7 @@ function dnsResponseBlockCallBack(response, currentRequest) {
     }
 }
 function loadException(response, currentRequest) {
-    log1.e(JSON.stringify(response));
+    log.e(JSON.stringify(response));
     currentRequest.stopProcessing = true;
     currentRequest.isException = true;
     currentRequest.exceptionStack = response.exceptionStack;
@@ -7086,8 +7022,8 @@ function base64ToArrayBuffer(base64) {
     const binaryString = atob(base64);
     const len = binaryString.length;
     const bytes = new Uint8Array(len);
-    for(let i37 = 0; i37 < len; i37++){
-        bytes[i37] = binaryString.charCodeAt(i37);
+    for(let i36 = 0; i36 < len; i36++){
+        bytes[i36] = binaryString.charCodeAt(i36);
     }
     return bytes.buffer;
 }
@@ -7159,30 +7095,92 @@ class EnvManager {
         globalThis.env = Object.fromEntries(this.env);
     }
 }
-function fromBrowser(req) {
-    if (!req || !req.headers) return false;
-    const ua = req.headers.get("User-Agent");
-    return ua && ua.startsWith("Mozilla/5.0");
+function globalConsoleLevel(level) {
+    level = level.toLowerCase().trim();
+    if (console.level) throw new Error("Console level already configured");
+    switch(level){
+        case "error":
+            globalThis.console.warn = ()=>null
+            ;
+        case "warn":
+            globalThis.console.info = ()=>null
+            ;
+        case "info":
+            globalThis.console.time = ()=>null
+            ;
+            globalThis.console.timeEnd = ()=>null
+            ;
+            globalThis.console.timeLog = ()=>null
+            ;
+        case "timer":
+            globalThis.console.debug = ()=>null
+            ;
+        case "debug":
+            break;
+        default:
+            console.error("Unknown console level", level);
+            level = null;
+    }
+    if (level) {
+        console.log("Global console level :", level);
+        globalThis.console.level = level;
+    }
+    return level;
 }
-function jsonHeaders(res) {
-    res.headers.set("Content-Type", "application/json");
+class Log {
+    constructor(level){
+        if (!console.level) throw new Error("Console level not configured");
+        this.logLevels = [
+            "error",
+            "warn",
+            "info",
+            "timer",
+            "debug"
+        ];
+        this.setLevel(level);
+    }
+    resetLevel() {
+        this.l = console.log;
+        this.d = ()=>null
+        ;
+        this.lapTime = ()=>null
+        ;
+        this.startTime = ()=>null
+        ;
+        this.endTime = ()=>null
+        ;
+        this.i = ()=>null
+        ;
+        this.w = ()=>null
+        ;
+        this.e = ()=>null
+        ;
+    }
+    setLevel(level) {
+        this.resetLevel();
+        switch(level){
+            default:
+            case "debug":
+                this.d = console.debug;
+            case "timer":
+                this.lapTime = console.timeLog;
+                this.startTime = function(name) {
+                    name += uid();
+                    console.time(name);
+                    return name;
+                };
+                this.endTime = console.timeEnd;
+            case "info":
+                this.i = console.info;
+            case "warn":
+                this.w = console.warn;
+            case "error":
+                this.e = console.error;
+        }
+        if (this.logLevels.indexOf(level) < 0) this.logLevel = "debug";
+        else this.logLevel = level;
+    }
 }
-function dnsHeaders(res) {
-    res.headers.set("Content-Type", "application/dns-message");
-}
-function corsHeaders(res) {
-    res.headers.set("Access-Control-Allow-Origin", "*");
-    res.headers.set("Access-Control-Allow-Headers", "*");
-}
-function browserHeaders(res) {
-    jsonHeaders(res);
-    corsHeaders(res);
-}
-function dohHeaders(req, res) {
-    dnsHeaders(res);
-    if (fromBrowser(req)) corsHeaders(res);
-}
-const log2 = new Log();
 globalThis.envManager = new EnvManager();
 if (typeof addEventListener !== "undefined") {
     addEventListener("fetch", (event)=>{
@@ -7190,12 +7188,9 @@ if (typeof addEventListener !== "undefined") {
     });
 }
 function handleRequest(event) {
-    if (!envManager.isLoaded) {
-        envManager.loadEnv();
-    }
-    if (!console.level) {
-        globalConsoleLevel(env.logLevel || "debug");
-    }
+    if (!envManager.isLoaded) envManager.loadEnv();
+    if (!console.level) globalConsoleLevel(env.logLevel || "debug");
+    if (!globalThis.log) globalThis.log = new Log();
     const processingTimeout = envManager.get("workerTimeout");
     const respectTimeout = envManager.get("runTimeEnv") == "worker" && processingTimeout > 0;
     if (!respectTimeout) return proxyRequest(event);
@@ -7225,7 +7220,7 @@ async function proxyRequest(event) {
         dohHeaders(event.request, currentRequest.httpResponse);
         return currentRequest.httpResponse;
     } catch (err) {
-        log2.e(err.stack);
+        log.e(err.stack);
         return errorOrServfail(event, err);
     }
 }
