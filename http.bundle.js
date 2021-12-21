@@ -105,8 +105,190 @@ try {
         export: true
     });
     Deno.env.set("RUNTIME", "deno");
-} catch (e26) {
-    console.warn(".env file may not be loaded => ", e26.name, ":", e26.message);
+} catch (e29) {
+    console.warn(".env file may not be loaded => ", e29.name, ":", e29.message);
+}
+const minlives = 1;
+const maxlives = 2 ** 14;
+const mincap = 2 ** 5;
+const maxcap = 2 ** 32;
+const minslots = 2;
+class Clock {
+    constructor(cap, slotsperhand = 256, maxlife = 16){
+        cap = this.bound(cap, mincap, maxcap);
+        this.capacity = 2 ** Math.round(Math.log2(cap));
+        this.rb = new Array(this.capacity);
+        this.rb.fill(null);
+        this.store = new Map();
+        this.maxcount = this.bound(maxlife, minlives, maxlives);
+        this.totalhands = Math.max(minslots, Math.round(this.capacity / slotsperhand));
+        this.hands = new Array(this.totalhands);
+        for(let i1 = 0; i1 < this.totalhands; i1++)this.hands[i1] = i1;
+    }
+    next(i2) {
+        const n = i2 + this.totalhands;
+        return (this.capacity + n) % this.capacity;
+    }
+    cur(i3) {
+        return (this.capacity + i3) % this.capacity;
+    }
+    prev(i4) {
+        const p = i4 - this.totalhands;
+        return (this.capacity + p) % this.capacity;
+    }
+    bound(i5, min, max) {
+        i5 = i5 < min ? min : i5;
+        i5 = i5 > max ? max - 1 : i5;
+        return i5;
+    }
+    head(n) {
+        n = this.bound(n, 0, this.totalhands);
+        const h = this.hands[n];
+        return this.cur(h);
+    }
+    incrHead(n) {
+        n = this.bound(n, 0, this.totalhands);
+        this.hands[n] = this.next(this.hands[n]);
+        return this.hands[n];
+    }
+    decrHead(n) {
+        n = this.bound(n, 0, this.totalhands);
+        this.hands[n] = this.prev(this.hands[n]);
+        return this.hands[n];
+    }
+    get size() {
+        return this.store.size;
+    }
+    evict(n, c) {
+        logd("evict start, head/num/size", this.head(n), n, this.size);
+        const start = this.head(n);
+        let h = start;
+        do {
+            const entry = this.rb[h];
+            if (entry === null) return true;
+            entry.count -= c;
+            if (entry.count <= 0) {
+                logd("evict", h, entry);
+                this.store.delete(entry.key);
+                this.rb[h] = null;
+                return true;
+            }
+            h = this.incrHead(n);
+        }while (h !== start)
+        return false;
+    }
+    put(k, v, c = 1) {
+        const cached = this.store.get(k);
+        if (cached) {
+            cached.value = v;
+            const at = this.rb[cached.pos];
+            at.count = Math.min(at.count + c, this.maxcount);
+            return true;
+        }
+        const num = this.rolldice;
+        this.evict(num, c);
+        const h = this.head(num);
+        const hasSlot = this.rb[h] === null;
+        if (!hasSlot) return false;
+        const ringv = {
+            key: k,
+            count: Math.min(c, this.maxcount)
+        };
+        const storev = {
+            value: v,
+            pos: h
+        };
+        this.rb[h] = ringv;
+        this.store.set(k, storev);
+        this.incrHead(num);
+        return true;
+    }
+    val(k, c = 1) {
+        const r = this.store.get(k);
+        if (!r) return null;
+        const at = this.rb[r.pos];
+        at.count = Math.min(at.count + c, this.maxcount);
+        return r.value;
+    }
+    get rolldice() {
+        const max = this.totalhands;
+        return Math.floor(Math.random() * (max - 0)) + 0;
+    }
+}
+function logd() {
+}
+class LfuCache {
+    constructor(id, capacity){
+        this.id = id;
+        this.cache = new Clock(capacity);
+    }
+    Get(key) {
+        let val = false;
+        try {
+            val = this.cache.val(key) || false;
+        } catch (e1) {
+            console.log("Error: " + this.id + " -> Get");
+            console.log(e1.stack);
+        }
+        return val;
+    }
+    Put(key, val) {
+        try {
+            this.cache.put(key, val);
+        } catch (e2) {
+            console.log("Error: " + this.id + " -> Put");
+            console.log(e2.stack);
+        }
+    }
+}
+class CacheApi {
+    constructor(){
+        this.wCache = caches.default;
+    }
+    async get(url) {
+        return await this.wCache.match(url);
+    }
+    put(url, response) {
+        this.wCache.put(url, response);
+    }
+}
+function isWorkers() {
+    return env && env.runTime === "worker";
+}
+function isNode() {
+    return env && env.runTime === "node";
+}
+class UserCache {
+    constructor(size){
+        this.localCache = new LfuCache("UserCache", size);
+    }
+    get(key) {
+        return this.localCache.Get(key);
+    }
+    put(key, data) {
+        try {
+            this.localCache.Put(key, data);
+        } catch (e3) {
+            console.error("Error At : UserCache -> Put");
+            console.error(e3.stack);
+        }
+    }
+}
+class DomainNameCache {
+    constructor(size){
+        this.localCache = new LfuCache("DomainNameCache", size);
+    }
+    get(key) {
+        return this.localCache.Get(key);
+    }
+    put(key, data) {
+        try {
+            this.localCache.Put(key, data);
+        } catch (e4) {
+            console.error("Error At : LocalCache -> Put");
+            console.error(e4.stack);
+        }
+    }
 }
 const hexTable = new TextEncoder().encode("0123456789abcdef");
 function errInvalidByte(__byte) {
@@ -123,19 +305,19 @@ function fromHexChar(__byte) {
 }
 function encode(src) {
     const dst = new Uint8Array(src.length * 2);
-    for(let i1 = 0; i1 < dst.length; i1++){
-        const v = src[i1];
-        dst[i1 * 2] = hexTable[v >> 4];
-        dst[i1 * 2 + 1] = hexTable[v & 15];
+    for(let i6 = 0; i6 < dst.length; i6++){
+        const v = src[i6];
+        dst[i6 * 2] = hexTable[v >> 4];
+        dst[i6 * 2 + 1] = hexTable[v & 15];
     }
     return dst;
 }
 function decode(src) {
     const dst = new Uint8Array(src.length / 2);
-    for(let i2 = 0; i2 < dst.length; i2++){
-        const a = fromHexChar(src[i2 * 2]);
-        const b = fromHexChar(src[i2 * 2 + 1]);
-        dst[i2] = a << 4 | b;
+    for(let i7 = 0; i7 < dst.length; i7++){
+        const a = fromHexChar(src[i7 * 2]);
+        const b = fromHexChar(src[i7 * 2 + 1]);
+        dst[i7] = a << 4 | b;
     }
     if (src.length % 2 == 1) {
         fromHexChar(src[dst.length * 2]);
@@ -211,23 +393,23 @@ const base64abc = [
 ];
 function encode1(data) {
     const uint8 = typeof data === "string" ? new TextEncoder().encode(data) : data instanceof Uint8Array ? data : new Uint8Array(data);
-    let result = "", i3;
+    let result = "", i8;
     const l1 = uint8.length;
-    for(i3 = 2; i3 < l1; i3 += 3){
-        result += base64abc[uint8[i3 - 2] >> 2];
-        result += base64abc[(uint8[i3 - 2] & 3) << 4 | uint8[i3 - 1] >> 4];
-        result += base64abc[(uint8[i3 - 1] & 15) << 2 | uint8[i3] >> 6];
-        result += base64abc[uint8[i3] & 63];
+    for(i8 = 2; i8 < l1; i8 += 3){
+        result += base64abc[uint8[i8 - 2] >> 2];
+        result += base64abc[(uint8[i8 - 2] & 3) << 4 | uint8[i8 - 1] >> 4];
+        result += base64abc[(uint8[i8 - 1] & 15) << 2 | uint8[i8] >> 6];
+        result += base64abc[uint8[i8] & 63];
     }
-    if (i3 === l1 + 1) {
-        result += base64abc[uint8[i3 - 2] >> 2];
-        result += base64abc[(uint8[i3 - 2] & 3) << 4];
+    if (i8 === l1 + 1) {
+        result += base64abc[uint8[i8 - 2] >> 2];
+        result += base64abc[(uint8[i8 - 2] & 3) << 4];
         result += "==";
     }
-    if (i3 === l1) {
-        result += base64abc[uint8[i3 - 2] >> 2];
-        result += base64abc[(uint8[i3 - 2] & 3) << 4 | uint8[i3 - 1] >> 4];
-        result += base64abc[(uint8[i3 - 1] & 15) << 2];
+    if (i8 === l1) {
+        result += base64abc[uint8[i8 - 2] >> 2];
+        result += base64abc[(uint8[i8 - 2] & 3) << 4 | uint8[i8 - 1] >> 4];
+        result += base64abc[(uint8[i8 - 1] & 15) << 2];
         result += "=";
     }
     return result;
@@ -236,8 +418,8 @@ function decode1(b64) {
     const binString = atob(b64);
     const size = binString.length;
     const bytes = new Uint8Array(size);
-    for(let i4 = 0; i4 < size; i4++){
-        bytes[i4] = binString.charCodeAt(i4);
+    for(let i9 = 0; i9 < size; i9++){
+        bytes[i9] = binString.charCodeAt(i9);
     }
     return bytes;
 }
@@ -353,8 +535,8 @@ function promisify(original) {
                 if (argumentNames !== undefined && values.length > 1) {
                     const obj = {
                     };
-                    for(let i5 = 0; i5 < argumentNames.length; i5++){
-                        obj[argumentNames[i5]] = values[i5];
+                    for(let i10 = 0; i10 < argumentNames.length; i10++){
+                        obj[argumentNames[i10]] = values[i10];
                     }
                     resolve(obj);
                 } else {
@@ -2308,8 +2490,8 @@ class Buffer extends Uint8Array {
         }
         if (this === otherBuffer) return true;
         if (this.byteLength !== otherBuffer.byteLength) return false;
-        for(let i6 = 0; i6 < this.length; i6++){
-            if (this[i6] !== otherBuffer[i6]) return false;
+        for(let i11 = 0; i11 < this.length; i11++){
+            if (this[i11] !== otherBuffer[i11]) return false;
         }
         return true;
     }
@@ -2461,6 +2643,763 @@ class Buffer extends Uint8Array {
 }
 globalThis.atob;
 globalThis.btoa;
+const BASE64 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_";
+const config1 = {
+    useBinarySearch: true,
+    debug: false,
+    selectsearch: true,
+    fastPos: true
+};
+const W = 16;
+const bufferView = {
+    15: Uint16Array,
+    16: Uint16Array,
+    6: Uint8Array
+};
+function CHR16(ord) {
+    return CHRM(ord, false);
+}
+function CHRM(ord, b64) {
+    return b64 ? BASE64[ord] : String.fromCharCode(ord);
+}
+const ORD = {
+};
+for(let i = 0; i < BASE64.length; i++){
+    ORD[BASE64[i]] = i;
+}
+function DEC16(chr) {
+    return DECM(chr, false);
+}
+function DECM(chr, b64) {
+    return b64 ? ORD[chr] : chr.charCodeAt(0);
+}
+const L1 = 32 * 32;
+const TxtEnc = new TextEncoder();
+const TxtDec = new TextDecoder();
+const DELIM = "#";
+const ENC_DELIM = TxtEnc.encode(DELIM);
+const periodEncVal = TxtEnc.encode(".");
+function BitString(str) {
+    this.init(str);
+}
+BitString.MaskTop = {
+    16: [
+        65535,
+        32767,
+        16383,
+        8191,
+        4095,
+        2047,
+        1023,
+        511,
+        255,
+        127,
+        63,
+        31,
+        15,
+        7,
+        3,
+        1,
+        0, 
+    ]
+};
+BitString.MaskBottom = {
+    16: [
+        65535,
+        65534,
+        65532,
+        65528,
+        65520,
+        65504,
+        65472,
+        65408,
+        65280,
+        65024,
+        64512,
+        63488,
+        61440,
+        57344,
+        49152,
+        32768,
+        0, 
+    ]
+};
+const BitsSetTable256 = [];
+function initialize() {
+    BitsSetTable256[0] = 0;
+    for(let i1 = 0; i1 < 256; i1++){
+        BitsSetTable256[i1] = (i1 & 1) + BitsSetTable256[Math.floor(i1 / 2)];
+    }
+}
+function countSetBits(n) {
+    return BitsSetTable256[n & 255] + BitsSetTable256[n >>> 8 & 255] + BitsSetTable256[n >>> 16 & 255] + BitsSetTable256[n >>> 24];
+}
+function bit0(n, p, pad) {
+    const r = bit0p(n, p);
+    if (r.scanned <= 0) return r.scanned;
+    if (r.index > 0) return r.scanned;
+    if (pad > r.scanned) return r.scanned + 1;
+    else return 0;
+}
+function bit0p(n, p) {
+    if (p == 0) return {
+        index: 0,
+        scanned: 0
+    };
+    if (n == 0 && p == 1) return {
+        index: 1,
+        scanned: 1
+    };
+    let c = 0, i2 = 0;
+    for(c = 0; n > 0 && p > c; n = n >>> 1){
+        c = c + (n < (n ^ 1)) ? 1 : 0;
+        i2 += 1;
+    }
+    return {
+        index: p == c ? i2 : 0,
+        scanned: i2
+    };
+}
+BitString.prototype = {
+    init: function(str) {
+        this.bytes = str;
+        this.length = this.bytes.length * W;
+    },
+    getData: function() {
+        return this.bytes;
+    },
+    encode: function(n) {
+        const e5 = [];
+        for(let i3 = 0; i3 < this.length; i3 += n){
+            e5.push(this.get(i3, Math.min(this.length, n)));
+        }
+        return e5;
+    },
+    get: function(p, n, debug = false) {
+        if (p % W + n <= W) {
+            return (this.bytes[p / W | 0] & BitString.MaskTop[W][p % W]) >> W - p % W - n;
+        } else {
+            let result = this.bytes[p / W | 0] & BitString.MaskTop[W][p % W];
+            let tmpCount = 0;
+            const disp1 = this.bytes[p / W | 0];
+            const disp2 = BitString.MaskTop[W][p % W];
+            const res1 = result;
+            const l2 = W - p % W;
+            p += l2;
+            n -= l2;
+            while(n >= W){
+                tmpCount++;
+                result = result << W | this.bytes[p / W | 0];
+                p += W;
+                n -= W;
+            }
+            const res2 = result;
+            if (n > 0) {
+                result = result << n | this.bytes[p / W | 0] >> W - n;
+            }
+            if (debug == true) {
+                console.log("disp1: " + disp1 + " disp2: " + disp2 + " loopcount: " + tmpCount + " res1: " + res1 + " res2: " + res2 + " r: " + result);
+            }
+            return result;
+        }
+    },
+    count: function(p, n) {
+        let count = 0;
+        while(n >= 16){
+            count += BitsSetTable256[this.get(p, 16)];
+            p += 16;
+            n -= 16;
+        }
+        return count + BitsSetTable256[this.get(p, n)];
+    },
+    pos0: function(i4, n) {
+        if (n < 0) return 0;
+        let step = 16;
+        let index = i4;
+        if (config1.fastPos === false) {
+            while(n > 0){
+                step = n <= 16 ? n : 16;
+                const bits0 = step - countSetBits(this.get(i4, step));
+                n -= bits0;
+                i4 += step;
+                index = i4 - 1;
+            }
+            return index;
+        }
+        while(n > 0){
+            const d = this.get(i4, step);
+            const bits0 = step - countSetBits(d);
+            if (n - bits0 < 0) {
+                step = Math.max(n, step / 2 | 0);
+                continue;
+            }
+            n -= bits0;
+            i4 += step;
+            const diff = n === 0 ? bit0(d, 1, step) : 1;
+            index = i4 - diff;
+        }
+        return index;
+    },
+    rank: function(x) {
+        let rank = 0;
+        for(let i5 = 0; i5 <= x; i5++){
+            if (this.get(i5, 1)) {
+                rank++;
+            }
+        }
+        return rank;
+    }
+};
+function RankDirectory(directoryData, bitData, numBits, l1Size, l2Size) {
+    this.init(directoryData, bitData, numBits, l1Size, l2Size);
+}
+RankDirectory.prototype = {
+    init: function(directoryData, trieData, numBits, l1Size, l2Size) {
+        this.directory = new BitString(directoryData);
+        this.data = new BitString(trieData);
+        this.l1Size = l1Size;
+        this.l2Size = l2Size;
+        this.l1Bits = Math.ceil(Math.log2(numBits));
+        this.l2Bits = Math.ceil(Math.log2(l1Size));
+        this.sectionBits = (l1Size / l2Size - 1) * this.l2Bits + this.l1Bits;
+        this.numBits = numBits;
+    },
+    getData: function() {
+        return this.directory.getData();
+    },
+    rank: function(which, x) {
+        if (config1.selectsearch) {
+            let rank = -1;
+            let sectionPos = 0;
+            if (x >= this.l2Size) {
+                sectionPos = (x / this.l2Size | 0) * this.l1Bits;
+                rank = this.directory.get(sectionPos - this.l1Bits, this.l1Bits);
+                x = x % this.l2Size;
+            }
+            const ans = x > 0 ? this.data.pos0(rank + 1, x) : rank;
+            if (config1.debug) {
+                console.log("ans: " + ans + " " + rank + ":r, x: " + x + " " + sectionPos + ":s " + this.l1Bits + ": l1");
+            }
+            return ans;
+        }
+        if (which === 0) {
+            return x - this.rank(1, x) + 1;
+        }
+        let rank = 0;
+        let o = x;
+        let sectionPos = 0;
+        if (o >= this.l1Size) {
+            sectionPos = (o / this.l1Size | 0) * this.sectionBits;
+            rank = this.directory.get(sectionPos - this.l1Bits, this.l1Bits);
+            o = o % this.l1Size;
+        }
+        if (o >= this.l2Size) {
+            sectionPos += (o / this.l2Size | 0) * this.l2Bits;
+            rank += this.directory.get(sectionPos - this.l2Bits, this.l2Bits);
+        }
+        rank += this.data.count(x - x % this.l2Size, x % this.l2Size + 1);
+        return rank;
+    },
+    select: function(which, y) {
+        let high = this.numBits;
+        let low = -1;
+        let val = -1;
+        let iter = 0;
+        if (config1.selectsearch) {
+            return this.rank(0, y);
+        }
+        while(high - low > 1){
+            const probe = (high + low) / 2 | 0;
+            const r = this.rank(which, probe);
+            iter += 1;
+            if (r === y) {
+                val = probe;
+                high = probe;
+            } else if (r < y) {
+                low = probe;
+            } else {
+                high = probe;
+            }
+        }
+        return val;
+    }
+};
+function Tags(flags) {
+    this.init();
+    this.setupFlags(flags);
+}
+Tags.prototype = {
+    init: function(flags) {
+        this.flags = {
+        };
+        this.rflags = {
+        };
+        this.fsize = 0;
+    },
+    setupFlags: function(flags) {
+        let i6 = 0;
+        for (const f of flags){
+            this.flags[f] = i6++;
+        }
+        this.rflags = flags;
+        this.fsize = Math.ceil(Math.log2(flags.length) / 16) + 1;
+    },
+    flagsToTag: function(flags) {
+        const header1 = flags[0];
+        const tagIndices = [];
+        const values = [];
+        for(let i8 = 0, mask = 32768; i8 < 16; i8++){
+            if (header1 << i8 === 0) break;
+            if ((header1 & mask) === mask) {
+                tagIndices.push(i8);
+            }
+            mask = mask >>> 1;
+        }
+        if (tagIndices.length !== flags.length - 1) {
+            console.log(tagIndices, flags, "flags and header mismatch (bug in upsert?)");
+            return values;
+        }
+        for(let i7 = 0; i7 < flags.length; i7++){
+            const flag = flags[i7 + 1];
+            const index = tagIndices[i7];
+            for(let j = 0, mask = 32768; j < 16; j++){
+                if (flag << j === 0) break;
+                if ((flag & mask) === mask) {
+                    const pos = index * 16 + j;
+                    if (config1.debug) {
+                        console.log("pos", pos, "index/tagIndices", index, tagIndices, "j/i", j, i7);
+                    }
+                    values.push(this.rflags[pos]);
+                }
+                mask = mask >>> 1;
+            }
+        }
+        return values;
+    }
+};
+function FrozenTrieNode(trie, index) {
+    this.trie = trie;
+    this.index = index;
+    let finCached, whCached, comCached, fcCached, chCached, valCached, flagCached;
+    this.final = ()=>{
+        if (typeof finCached === "undefined") {
+            finCached = this.trie.data.get(this.trie.letterStart + index * this.trie.bitslen + this.trie.extraBit, 1) === 1;
+        }
+        return finCached;
+    };
+    this.where = ()=>{
+        if (typeof whCached === "undefined") {
+            whCached = this.trie.data.get(this.trie.letterStart + index * this.trie.bitslen + 1 + this.trie.extraBit, this.trie.bitslen - 1 - this.trie.extraBit);
+        }
+        return whCached;
+    };
+    this.compressed = ()=>{
+        if (typeof comCached === "undefined") {
+            comCached = this.trie.data.get(this.trie.letterStart + index * this.trie.bitslen, 1) === 1;
+        }
+        return comCached;
+    };
+    this.flag = ()=>{
+        if (typeof flagCached === "undefined") {
+            flagCached = this.compressed() && this.final();
+        }
+        return flagCached;
+    };
+    this.letter = ()=>this.where()
+    ;
+    this.firstChild = ()=>{
+        if (!fcCached) fcCached = this.trie.directory.select(0, index + 1) - index;
+        return fcCached;
+    };
+    if (config1.debug) {
+        console.log(index + " :i, fc: " + this.firstChild() + " tl: " + this.letter() + " c: " + this.compressed() + " f: " + this.final() + " wh: " + this.where() + " flag: " + this.flag());
+    }
+    this.childOfNextNode = ()=>{
+        if (!chCached) {
+            chCached = this.trie.directory.select(0, index + 2) - index - 1;
+        }
+        return chCached;
+    };
+    this.childCount = ()=>this.childOfNextNode() - this.firstChild()
+    ;
+    this.value = ()=>{
+        if (typeof valCached === "undefined") {
+            const value = [];
+            let i9 = 0;
+            let j = 0;
+            if (config1.debug) {
+                console.log("thisnode: index/vc/ccount ", this.index, this.letter(), this.childCount());
+            }
+            while(i9 < this.childCount()){
+                const valueChain = this.getChild(i9);
+                if (config1.debug) {
+                    console.log("vc no-flag end vlet/vflag/vindex/val ", i9, valueChain.letter(), valueChain.flag(), valueChain.index, value);
+                }
+                if (!valueChain.flag()) {
+                    break;
+                }
+                if (i9 % 2 === 0) {
+                    value.push(valueChain.letter() << 8);
+                } else {
+                    value[j] = value[j] | valueChain.letter();
+                    j += 1;
+                }
+                i9 += 1;
+            }
+            valCached = value;
+        }
+        return valCached;
+    };
+}
+FrozenTrieNode.prototype = {
+    getChildCount: function() {
+        return this.childCount();
+    },
+    getChild: function(index) {
+        return this.trie.getNodeByIndex(this.firstChild() + index);
+    }
+};
+function FrozenTrie(data, rdir, nodeCount) {
+    this.init(data, rdir, nodeCount);
+}
+FrozenTrie.prototype = {
+    init: function(trieData, rdir, nodeCount) {
+        this.data = new BitString(trieData);
+        this.directory = rdir;
+        this.extraBit = 1;
+        this.bitslen = 9 + this.extraBit;
+        this.letterStart = nodeCount * 2 + 1;
+    },
+    getNodeByIndex: function(index) {
+        return new FrozenTrieNode(this, index);
+    },
+    getRoot: function() {
+        return this.getNodeByIndex(0);
+    },
+    lookup: function(word) {
+        const index = word.lastIndexOf(ENC_DELIM[0]);
+        if (index > 0) word = word.slice(0, index);
+        const debug = config1.debug;
+        let node = this.getRoot();
+        let child;
+        let returnValue = false;
+        for(let i10 = 0; i10 < word.length; i10++){
+            let isFlag = -1;
+            let that;
+            if (periodEncVal[0] == word[i10]) {
+                if (node.final()) {
+                    if (returnValue == false) returnValue = new Map();
+                    returnValue.set(TxtDec.decode(word.slice(0, i10).reverse()), node.value());
+                }
+            }
+            do {
+                that = node.getChild(isFlag + 1);
+                if (!that.flag()) break;
+                isFlag += 1;
+            }while (isFlag + 1 < node.getChildCount())
+            const minChild = isFlag;
+            if (debug) {
+                console.log("            count: " + node.getChildCount() + " i: " + i10 + " w: " + word[i10] + " nl: " + node.letter() + " flag: " + isFlag);
+            }
+            if (node.getChildCount() - 1 <= minChild) {
+                if (debug) {
+                    console.log("  no more children left, remaining word: " + word.slice(i10));
+                }
+                return returnValue;
+            }
+            if (config1.useBinarySearch === false) {
+                let j = isFlag;
+                for(; j < node.getChildCount(); j++){
+                    child = node.getChild(j);
+                    if (debug) {
+                        console.log("it: " + j + " tl: " + child.letter() + " wl: " + word[i10]);
+                    }
+                    if (child.letter() == word[i10]) {
+                        if (debug) console.log("it: " + j + " break ");
+                        break;
+                    }
+                }
+                if (j === node.getChildCount()) {
+                    if (debug) console.log("j: " + j + " c: " + node.getChildCount());
+                    return returnValue;
+                }
+            } else {
+                let high = node.getChildCount();
+                let low = isFlag;
+                while(high - low > 1){
+                    const probe = (high + low) / 2 | 0;
+                    child = node.getChild(probe);
+                    const prevchild = probe > isFlag ? node.getChild(probe - 1) : undefined;
+                    if (debug) {
+                        console.log("        current: " + child.letter() + " l: " + low + " h: " + high + " w: " + word[i10]);
+                    }
+                    if (child.compressed() || prevchild && prevchild.compressed() && !prevchild.flag()) {
+                        const startchild = [];
+                        const endchild = [];
+                        let start = 0;
+                        let end = 0;
+                        startchild.push(child);
+                        start += 1;
+                        do {
+                            const temp = node.getChild(probe - start);
+                            if (!temp.compressed()) break;
+                            if (temp.flag()) break;
+                            startchild.push(temp);
+                            start += 1;
+                        }while (true)
+                        if (startchild[start - 1].letter() > word[i10]) {
+                            if (debug) {
+                                console.log("        shrinkh start: " + startchild[start - 1].letter() + " s: " + start + " w: " + word[i10]);
+                            }
+                            high = probe - start + 1;
+                            if (high - low <= 1) {
+                                if (debug) {
+                                    console.log("...h-low: " + (high - low) + " c: " + node.getChildCount(), high, low, child.letter(), word[i10], probe);
+                                }
+                                return returnValue;
+                            }
+                            continue;
+                        }
+                        if (child.compressed()) {
+                            do {
+                                end += 1;
+                                const temp = node.getChild(probe + end);
+                                endchild.push(temp);
+                                if (!temp.compressed()) break;
+                            }while (true)
+                        }
+                        if (startchild[start - 1].letter() < word[i10]) {
+                            if (debug) {
+                                console.log("        shrinkl start: " + startchild[start - 1].letter() + " s: " + start + " w: " + word[i10]);
+                            }
+                            low = probe + end;
+                            if (high - low <= 1) {
+                                if (debug) {
+                                    console.log("...h-low: " + (high - low) + " c: " + node.getChildCount(), high, low, child.letter(), word[i10], probe);
+                                }
+                                return returnValue;
+                            }
+                            continue;
+                        }
+                        const nodes = startchild.reverse().concat(endchild);
+                        const comp = nodes.map((n)=>n.letter()
+                        );
+                        const w = word.slice(i10, i10 + comp.length);
+                        if (debug) {
+                            console.log("it: " + probe + " tl: " + comp + " wl: " + w + " c: " + child.letter());
+                        }
+                        if (w.length < comp.length) return returnValue;
+                        for(let i11 = 0; i11 < comp.length; i11++){
+                            if (w[i11] !== comp[i11]) return returnValue;
+                        }
+                        if (debug) console.log("it: " + probe + " break ");
+                        child = nodes[nodes.length - 1];
+                        i10 += comp.length - 1;
+                        break;
+                    } else {
+                        if (child.letter() === word[i10]) {
+                            break;
+                        } else if (word[i10] > child.letter()) {
+                            low = probe;
+                        } else {
+                            high = probe;
+                        }
+                    }
+                    if (high - low <= 1) {
+                        if (debug) {
+                            console.log("h-low: " + (high - low) + " c: " + node.getChildCount(), high, low, child.letter(), word[i10], probe);
+                        }
+                        return returnValue;
+                    }
+                }
+            }
+            if (debug) console.log("        next: " + child.letter());
+            node = child;
+        }
+        if (node.final()) {
+            if (returnValue == false) returnValue = new Map();
+            returnValue.set(TxtDec.decode(word.reverse()), node.value());
+        }
+        return returnValue;
+    }
+};
+function customTagToFlag(fl, blocklistFileTag) {
+    let res = CHR16(0);
+    for (const flag of fl){
+        const val = blocklistFileTag[flag].value;
+        const header = 0;
+        const index = val / 16 | 0;
+        const pos = val % 16;
+        let h = 0;
+        h = DEC16(res[header]);
+        const dataIndex = countSetBits(h & BitString.MaskBottom[16][16 - index]) + 1;
+        let n = (h >>> 15 - index & 1) !== 1 ? 0 : DEC16(res[dataIndex]);
+        const upsertData = n !== 0;
+        h |= 1 << 15 - index;
+        n |= 1 << 15 - pos;
+        res = CHR16(h) + res.slice(1, dataIndex) + CHR16(n) + res.slice(upsertData ? dataIndex + 1 : dataIndex);
+    }
+    return res;
+}
+function createBlocklistFilter(tdbuf, rdbuf, blocklistFileTag, blocklistBasicConfig) {
+    initialize();
+    try {
+        let tag = {
+        };
+        let fl = [];
+        for(const fileuname in blocklistFileTag){
+            if (!blocklistFileTag.hasOwnProperty(fileuname)) continue;
+            fl[blocklistFileTag[fileuname].value] = fileuname;
+            const v = DELIM + blocklistFileTag[fileuname].uname;
+            tag[fileuname] = v.split("").reverse().join("");
+        }
+        const tags = new Tags(fl);
+        const tdv = new bufferView[16](tdbuf);
+        const rdv = new bufferView[16](rdbuf);
+        const nc = blocklistBasicConfig.nodecount;
+        const numbits = blocklistBasicConfig.nodecount * 2 + 1;
+        const rd = new RankDirectory(rdv, tdv, numbits, L1, 32);
+        const frozentrie = new FrozenTrie(tdv, rd, nc);
+        return {
+            t: tags,
+            ft: frozentrie
+        };
+    } catch (e6) {
+        throw e6;
+    }
+}
+const ALPHA32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+function readChar(chr) {
+    chr = chr.toUpperCase();
+    const idx = ALPHA32.indexOf(chr);
+    if (idx === -1) {
+        throw new Error("invalid b32 character: " + chr);
+    }
+    return idx;
+}
+function rbase32(input) {
+    input = input.replace(/=+$/, "");
+    const length = input.length;
+    let bits = 0;
+    let value = 0;
+    let index = 0;
+    let output = new Uint8Array(length * 5 / 8 | 0);
+    for(var i12 = 0; i12 < length; i12++){
+        value = value << 5 | readChar(input[i12]);
+        bits += 5;
+        if (bits >= 8) {
+            output[index++] = value >>> bits - 8 & 255;
+            bits -= 8;
+        }
+    }
+    return output;
+}
+class DNSBlockOperation {
+    checkDomainBlocking(userBlocklistFlagUint, userServiceListUint, flagVersion, blocklistMap, blocklistFilter, domainName) {
+        let response;
+        try {
+            response = checkDomainNameUserFlagIntersection(userBlocklistFlagUint, flagVersion, blocklistMap, blocklistFilter, domainName);
+            if (response.isBlocked) {
+                return response;
+            }
+            if (userServiceListUint) {
+                let dnSplit = domainName.split(".");
+                let dnJoin = "";
+                let wildCardResponse;
+                while(dnSplit.shift() != undefined){
+                    dnJoin = dnSplit.join(".");
+                    wildCardResponse = checkDomainNameUserFlagIntersection(userServiceListUint, flagVersion, blocklistMap, blocklistFilter, dnJoin);
+                    if (wildCardResponse.isBlocked) {
+                        return wildCardResponse;
+                    }
+                }
+            }
+        } catch (e7) {
+            throw e7;
+        }
+        return response;
+    }
+}
+function checkDomainNameUserFlagIntersection(userBlocklistFlagUint, flagVersion, blocklistMap, blocklistFilter, domainName) {
+    let response = {
+    };
+    try {
+        response.isBlocked = false;
+        response.blockedB64Flag = "";
+        response.blockedTag = [];
+        if (blocklistMap.has(domainName)) {
+            let domainNameInBlocklistUint = blocklistMap.get(domainName);
+            let blockedUint = blocklistFilter.flagIntersection(userBlocklistFlagUint, domainNameInBlocklistUint);
+            if (blockedUint) {
+                response.isBlocked = true;
+                response.blockedB64Flag = blocklistFilter.getB64FlagFromUint16(blockedUint, flagVersion);
+            } else {
+                blockedUint = new Uint16Array(domainNameInBlocklistUint);
+                response.blockedB64Flag = blocklistFilter.getB64FlagFromUint16(blockedUint, flagVersion);
+            }
+        }
+    } catch (e8) {
+        throw e8;
+    }
+    return response;
+}
+function fromBrowser(req) {
+    if (!req || !req.headers) return false;
+    const ua = req.headers.get("User-Agent");
+    return ua && ua.startsWith("Mozilla/5.0");
+}
+function jsonHeaders(res) {
+    res.headers.set("Content-Type", "application/json");
+}
+function dnsHeaders(res) {
+    res.headers.set("Accept", "application/dns-message");
+    res.headers.set("Content-Type", "application/dns-message");
+}
+function corsHeaders(res) {
+    res.headers.set("Access-Control-Allow-Origin", "*");
+    res.headers.set("Access-Control-Allow-Headers", "*");
+}
+function browserHeaders(res) {
+    jsonHeaders(res);
+    corsHeaders(res);
+}
+function dohHeaders(req, res) {
+    dnsHeaders(res);
+    if (fromBrowser(req)) corsHeaders(res);
+}
+function objOf(map) {
+    return map.entries ? Object.fromEntries(map) : false;
+}
+function arrayBufferOf(buf) {
+    const offset = buf.byteOffset;
+    const len = buf.byteLength;
+    return buf.buffer.slice(offset, offset + len);
+}
+function bufferOf(arrayBuf) {
+    return Buffer.from(new Uint8Array(arrayBuf));
+}
+function uid() {
+    return (Math.random() + 1).toString(36).slice(1);
+}
+function emptyResponse() {
+    return {
+        isException: false,
+        exceptionStack: "",
+        exceptionFrom: "",
+        data: {
+            responseDecodedDnsPacket: null,
+            responseBodyBuffer: null
+        }
+    };
+}
+function errResponse(id, err) {
+    return {
+        isException: true,
+        exceptionStack: err.stack,
+        exceptionFrom: id,
+        data: false
+    };
+}
 "use strict";
 function toString(type) {
     switch(type){
@@ -2905,16 +3844,16 @@ ip.toBuffer = function(ip1, buff, offset) {
         });
     } else if (this.isV6Format(ip1)) {
         var sections = ip1.split(":", 8);
-        var i7;
-        for(i7 = 0; i7 < sections.length; i7++){
-            var isv4 = this.isV4Format(sections[i7]);
+        var i13;
+        for(i13 = 0; i13 < sections.length; i13++){
+            var isv4 = this.isV4Format(sections[i13]);
             var v4Buffer;
             if (isv4) {
-                v4Buffer = this.toBuffer(sections[i7]);
-                sections[i7] = v4Buffer.slice(0, 2).toString("hex");
+                v4Buffer = this.toBuffer(sections[i13]);
+                sections[i13] = v4Buffer.slice(0, 2).toString("hex");
             }
-            if (v4Buffer && ++i7 < 8) {
-                sections.splice(i7, 0, v4Buffer.slice(2, 4).toString("hex"));
+            if (v4Buffer && ++i13 < 8) {
+                sections.splice(i13, 0, v4Buffer.slice(2, 4).toString("hex"));
             }
         }
         if (sections[0] === "") {
@@ -2922,19 +3861,19 @@ ip.toBuffer = function(ip1, buff, offset) {
         } else if (sections[sections.length - 1] === "") {
             while(sections.length < 8)sections.push("0");
         } else if (sections.length < 8) {
-            for(i7 = 0; i7 < sections.length && sections[i7] !== ""; i7++);
+            for(i13 = 0; i13 < sections.length && sections[i13] !== ""; i13++);
             var argv = [
-                i7,
+                i13,
                 1
             ];
-            for(i7 = 9 - sections.length; i7 > 0; i7--){
+            for(i13 = 9 - sections.length; i13 > 0; i13--){
                 argv.push("0");
             }
             sections.splice.apply(sections, argv);
         }
         result = buff || new Buffer(offset + 16);
-        for(i7 = 0; i7 < sections.length; i7++){
-            var word = parseInt(sections[i7], 16);
+        for(i13 = 0; i13 < sections.length; i13++){
+            var word = parseInt(sections[i13], 16);
             result[offset++] = word >> 8 & 255;
             result[offset++] = word & 255;
         }
@@ -2949,13 +3888,13 @@ ip.toString = function(buff, offset, length) {
     length = length || buff.length - offset;
     var result = [];
     if (length === 4) {
-        for(var i8 = 0; i8 < length; i8++){
-            result.push(buff[offset + i8]);
+        for(var i14 = 0; i14 < length; i14++){
+            result.push(buff[offset + i14]);
         }
         result = result.join(".");
     } else if (length === 16) {
-        for(var i8 = 0; i8 < length; i8 += 2){
-            result.push(buff.readUInt16BE(offset + i8).toString(16));
+        for(var i14 = 0; i14 < length; i14 += 2){
+            result.push(buff.readUInt16BE(offset + i14).toString(16));
         }
         result = result.join(":");
         result = result.replace(/(^|:)0(:0)*:0(:|$)/, "$1::$3");
@@ -2985,13 +3924,13 @@ ip.fromPrefixLen = function(prefixlen, family) {
         len = 16;
     }
     var buff = new Buffer(len);
-    for(var i9 = 0, n = buff.length; i9 < n; ++i9){
+    for(var i15 = 0, n = buff.length; i15 < n; ++i15){
         var bits = 8;
         if (prefixlen < 8) {
             bits = prefixlen;
         }
         prefixlen -= bits;
-        buff[i9] = ~(255 >> bits) & 255;
+        buff[i15] = ~(255 >> bits) & 255;
     }
     return ip.toString(buff);
 };
@@ -2999,28 +3938,28 @@ ip.mask = function(addr, mask) {
     addr = ip.toBuffer(addr);
     mask = ip.toBuffer(mask);
     var result = new Buffer(Math.max(addr.length, mask.length));
-    var i10 = 0;
+    var i16 = 0;
     if (addr.length === mask.length) {
-        for(i10 = 0; i10 < addr.length; i10++){
-            result[i10] = addr[i10] & mask[i10];
+        for(i16 = 0; i16 < addr.length; i16++){
+            result[i16] = addr[i16] & mask[i16];
         }
     } else if (mask.length === 4) {
-        for(i10 = 0; i10 < mask.length; i10++){
-            result[i10] = addr[addr.length - 4 + i10] & mask[i10];
+        for(i16 = 0; i16 < mask.length; i16++){
+            result[i16] = addr[addr.length - 4 + i16] & mask[i16];
         }
     } else {
-        for(var i10 = 0; i10 < result.length - 6; i10++){
-            result[i10] = 0;
+        for(var i16 = 0; i16 < result.length - 6; i16++){
+            result[i16] = 0;
         }
         result[10] = 255;
         result[11] = 255;
-        for(i10 = 0; i10 < addr.length; i10++){
-            result[i10 + 12] = addr[i10] & mask[i10 + 12];
+        for(i16 = 0; i16 < addr.length; i16++){
+            result[i16 + 12] = addr[i16] & mask[i16 + 12];
         }
-        i10 = i10 + 12;
+        i16 = i16 + 12;
     }
-    for(; i10 < result.length; i10++){
-        result[i10] = 0;
+    for(; i16 < result.length; i16++){
+        result[i16] = 0;
     }
     return ip.toString(result);
 };
@@ -3037,11 +3976,11 @@ ip.subnet = function(addr, mask) {
     var networkAddress = ip.toLong(ip.mask(addr, mask));
     var maskBuffer = ip.toBuffer(mask);
     var maskLength = 0;
-    for(var i11 = 0; i11 < maskBuffer.length; i11++){
-        if (maskBuffer[i11] === 255) {
+    for(var i17 = 0; i17 < maskBuffer.length; i17++){
+        if (maskBuffer[i17] === 255) {
             maskLength += 8;
         } else {
-            var octet = maskBuffer[i11] & 255;
+            var octet = maskBuffer[i17] & 255;
             while(octet){
                 octet = octet << 1 & 255;
                 maskLength++;
@@ -3074,8 +4013,8 @@ ip.cidrSubnet = function(cidrString) {
 };
 ip.not = function(addr) {
     var buff = ip.toBuffer(addr);
-    for(var i12 = 0; i12 < buff.length; i12++){
-        buff[i12] = 255 ^ buff[i12];
+    for(var i18 = 0; i18 < buff.length; i18++){
+        buff[i18] = 255 ^ buff[i18];
     }
     return ip.toString(buff);
 };
@@ -3083,8 +4022,8 @@ ip.or = function(a, b) {
     a = ip.toBuffer(a);
     b = ip.toBuffer(b);
     if (a.length === b.length) {
-        for(var i13 = 0; i13 < a.length; ++i13){
-            a[i13] |= b[i13];
+        for(var i19 = 0; i19 < a.length; ++i19){
+            a[i19] |= b[i19];
         }
         return ip.toString(a);
     } else {
@@ -3095,8 +4034,8 @@ ip.or = function(a, b) {
             other = a;
         }
         var offset = buff.length - other.length;
-        for(var i13 = offset; i13 < buff.length; ++i13){
-            buff[i13] |= other[i13 - offset];
+        for(var i19 = offset; i19 < buff.length; ++i19){
+            buff[i19] |= other[i19 - offset];
         }
         return ip.toString(buff);
     }
@@ -3105,8 +4044,8 @@ ip.isEqual = function(a, b) {
     a = ip.toBuffer(a);
     b = ip.toBuffer(b);
     if (a.length === b.length) {
-        for(var i14 = 0; i14 < a.length; i14++){
-            if (a[i14] !== b[i14]) return false;
+        for(var i20 = 0; i20 < a.length; i20++){
+            if (a[i20] !== b[i20]) return false;
         }
         return true;
     }
@@ -3115,13 +4054,13 @@ ip.isEqual = function(a, b) {
         b = a;
         a = t;
     }
-    for(var i14 = 0; i14 < 10; i14++){
-        if (b[i14] !== 0) return false;
+    for(var i20 = 0; i20 < 10; i20++){
+        if (b[i20] !== 0) return false;
     }
     var word = b.readUInt16BE(10);
     if (word !== 0 && word !== 65535) return false;
-    for(var i14 = 0; i14 < 4; i14++){
-        if (a[i14] !== b[i14 + 12]) return false;
+    for(var i20 = 0; i20 < 4; i20++){
+        if (a[i20] !== b[i20 + 12]) return false;
     }
     return true;
 };
@@ -3168,8 +4107,8 @@ name1.encode = function(str, buf, offset) {
     const n = str.replace(/^\.|\.$/gm, "");
     if (n.length) {
         const list = n.split(".");
-        for(let i15 = 0; i15 < list.length; i15++){
-            const len = buf.write(list[i15], offset + 1);
+        for(let i21 = 0; i21 < list.length; i21++){
+            const len = buf.write(list[i21], offset + 1);
             buf[offset] = len;
             offset += len + 1;
         }
@@ -3380,11 +4319,11 @@ rtxt.encode = function(data, buf, offset) {
     if (!Array.isArray(data)) data = [
         data
     ];
-    for(let i16 = 0; i16 < data.length; i16++){
-        if (typeof data[i16] === "string") {
-            data[i16] = Buffer.from(data[i16]);
+    for(let i22 = 0; i22 < data.length; i22++){
+        if (typeof data[i22] === "string") {
+            data[i22] = Buffer.from(data[i22]);
         }
-        if (!Buffer.isBuffer(data[i16])) {
+        if (!Buffer.isBuffer(data[i22])) {
             throw new Error("Must be a Buffer");
         }
     }
@@ -3768,7 +4707,7 @@ roption.decode = function(buf, offset) {
             break;
         case 14:
             option.tags = [];
-            for(let i17 = 0; i17 < len; i17 += 2){
+            for(let i23 = 0; i23 < len; i23 += 2){
                 option.tags.push(buf.readUInt16BE(offset));
                 offset += 2;
             }
@@ -3984,17 +4923,17 @@ typebitmap.encode = function(typelist, buf, offset) {
     if (!offset) offset = 0;
     const oldOffset = offset;
     var typesByWindow = [];
-    for(var i18 = 0; i18 < typelist.length; i18++){
-        var typeid = toType(typelist[i18]);
+    for(var i24 = 0; i24 < typelist.length; i24++){
+        var typeid = toType(typelist[i24]);
         if (typesByWindow[typeid >> 8] === undefined) {
             typesByWindow[typeid >> 8] = [];
         }
         typesByWindow[typeid >> 8][typeid >> 3 & 31] |= 1 << 7 - (typeid & 7);
     }
-    for(i18 = 0; i18 < typesByWindow.length; i18++){
-        if (typesByWindow[i18] !== undefined) {
-            var windowBuf = Buffer.from(typesByWindow[i18]);
-            buf.writeUInt8(i18, offset);
+    for(i24 = 0; i24 < typesByWindow.length; i24++){
+        if (typesByWindow[i24] !== undefined) {
+            var windowBuf = Buffer.from(typesByWindow[i24]);
+            buf.writeUInt8(i24, offset);
             offset += 1;
             buf.writeUInt8(windowBuf.length, offset);
             offset += 1;
@@ -4015,11 +4954,11 @@ typebitmap.decode = function(buf, offset, length) {
         offset += 1;
         var windowLength = buf.readUInt8(offset);
         offset += 1;
-        for(var i19 = 0; i19 < windowLength; i19++){
-            var b = buf.readUInt8(offset + i19);
+        for(var i25 = 0; i25 < windowLength; i25++){
+            var b = buf.readUInt8(offset + i25);
             for(var j = 0; j < 8; j++){
                 if (b & 1 << 7 - j) {
-                    var typeid = toString(window << 8 | i19 << 3 | j);
+                    var typeid = toString(window << 8 | i25 << 3 | j);
                     typelist.push(typeid);
                 }
             }
@@ -4032,14 +4971,14 @@ typebitmap.decode = function(buf, offset, length) {
 typebitmap.decode.bytes = 0;
 typebitmap.encodingLength = function(typelist) {
     var extents = [];
-    for(var i20 = 0; i20 < typelist.length; i20++){
-        var typeid = toType(typelist[i20]);
+    for(var i26 = 0; i26 < typelist.length; i26++){
+        var typeid = toType(typelist[i26]);
         extents[typeid >> 8] = Math.max(extents[typeid >> 8] || 0, typeid & 255);
     }
     var len = 0;
-    for(i20 = 0; i20 < extents.length; i20++){
-        if (extents[i20] !== undefined) {
-            len += 2 + Math.ceil((extents[i20] + 1) / 8);
+    for(i26 = 0; i26 < extents.length; i26++){
+        if (extents[i26] !== undefined) {
+            len += 2 + Math.ceil((extents[i26] + 1) / 8);
         }
     }
     return len;
@@ -4718,19 +5657,19 @@ const streamDecode = function(sbuf) {
 streamDecode.bytes = 0;
 function encodingLengthList(list, enc) {
     let len = 0;
-    for(let i21 = 0; i21 < list.length; i21++)len += enc.encodingLength(list[i21]);
+    for(let i27 = 0; i27 < list.length; i27++)len += enc.encodingLength(list[i27]);
     return len;
 }
 function encodeList(list, enc, buf, offset) {
-    for(let i22 = 0; i22 < list.length; i22++){
-        enc.encode(list[i22], buf, offset);
+    for(let i28 = 0; i28 < list.length; i28++){
+        enc.encode(list[i28], buf, offset);
         offset += enc.encode.bytes;
     }
     return offset;
 }
 function decodeList(list, enc, buf, offset) {
-    for(let i23 = 0; i23 < list.length; i23++){
-        list[i23] = enc.decode(buf, offset);
+    for(let i29 = 0; i29 < list.length; i29++){
+        list[i29] = enc.decode(buf, offset);
         offset += enc.decode.bytes;
     }
     return offset;
@@ -4738,293 +5677,26 @@ function decodeList(list, enc, buf, offset) {
 class DNSParserWrap {
     constructor(){
     }
-    Decode(arrayBuffer) {
+    decode(arrayBuffer) {
         try {
             return decode2(Buffer.from(new Uint8Array(arrayBuffer)));
-        } catch (e1) {
+        } catch (e9) {
             console.error("Error At : DNSParserWrap -> Decode");
-            throw e1;
+            throw e9;
         }
     }
-    Encode(DecodedDnsPacket) {
+    encode(DecodedDnsPacket) {
         try {
             return encode2(DecodedDnsPacket);
-        } catch (e2) {
+        } catch (e10) {
             console.error("Error At : DNSParserWrap -> Encode");
-            throw e2;
+            throw e10;
         }
     }
-}
-function isWorkers() {
-    return env && env.runTime === "worker";
-}
-function isNode() {
-    return env && env.runTime === "node";
-}
-const minlives = 1;
-const maxlives = 2 ** 14;
-const mincap = 2 ** 5;
-const maxcap = 2 ** 32;
-const minslots = 2;
-class Clock {
-    constructor(cap, slotsperhand = 256, maxlife = 16){
-        cap = this.bound(cap, mincap, maxcap);
-        this.capacity = 2 ** Math.round(Math.log2(cap));
-        this.rb = new Array(this.capacity);
-        this.rb.fill(null);
-        this.store = new Map();
-        this.maxcount = this.bound(maxlife, minlives, maxlives);
-        this.totalhands = Math.max(minslots, Math.round(this.capacity / slotsperhand));
-        this.hands = new Array(this.totalhands);
-        for(let i24 = 0; i24 < this.totalhands; i24++)this.hands[i24] = i24;
-    }
-    next(i25) {
-        const n = i25 + this.totalhands;
-        return (this.capacity + n) % this.capacity;
-    }
-    cur(i26) {
-        return (this.capacity + i26) % this.capacity;
-    }
-    prev(i27) {
-        const p = i27 - this.totalhands;
-        return (this.capacity + p) % this.capacity;
-    }
-    bound(i28, min, max) {
-        i28 = i28 < min ? min : i28;
-        i28 = i28 > max ? max - 1 : i28;
-        return i28;
-    }
-    head(n) {
-        n = this.bound(n, 0, this.totalhands);
-        const h = this.hands[n];
-        return this.cur(h);
-    }
-    incrHead(n) {
-        n = this.bound(n, 0, this.totalhands);
-        this.hands[n] = this.next(this.hands[n]);
-        return this.hands[n];
-    }
-    decrHead(n) {
-        n = this.bound(n, 0, this.totalhands);
-        this.hands[n] = this.prev(this.hands[n]);
-        return this.hands[n];
-    }
-    get size() {
-        return this.store.size;
-    }
-    evict(n, c) {
-        logd("evict start, head/num/size", this.head(n), n, this.size);
-        const start = this.head(n);
-        let h = start;
-        do {
-            const entry = this.rb[h];
-            if (entry === null) return true;
-            entry.count -= c;
-            if (entry.count <= 0) {
-                logd("evict", h, entry);
-                this.store.delete(entry.key);
-                this.rb[h] = null;
-                return true;
-            }
-            h = this.incrHead(n);
-        }while (h !== start)
-        return false;
-    }
-    put(k, v, c = 1) {
-        const cached = this.store.get(k);
-        if (cached) {
-            cached.value = v;
-            const at = this.rb[cached.pos];
-            at.count = Math.min(at.count + c, this.maxcount);
-            return true;
-        }
-        const num = this.rolldice;
-        this.evict(num, c);
-        const h = this.head(num);
-        const hasSlot = this.rb[h] === null;
-        if (!hasSlot) return false;
-        const ringv = {
-            key: k,
-            count: Math.min(c, this.maxcount)
-        };
-        const storev = {
-            value: v,
-            pos: h
-        };
-        this.rb[h] = ringv;
-        this.store.set(k, storev);
-        this.incrHead(num);
-        return true;
-    }
-    val(k, c = 1) {
-        const r = this.store.get(k);
-        if (!r) return null;
-        const at = this.rb[r.pos];
-        at.count = Math.min(at.count + c, this.maxcount);
-        return r.value;
-    }
-    get rolldice() {
-        const max = this.totalhands;
-        return Math.floor(Math.random() * (max - 0)) + 0;
-    }
-}
-function logd() {
-}
-class LfuCache {
-    constructor(id, capacity){
-        this.id = id;
-        this.cache = new Clock(capacity);
-    }
-    Get(key) {
-        let val = false;
-        try {
-            val = this.cache.val(key) || false;
-        } catch (e3) {
-            console.log("Error: " + this.id + " -> Get");
-            console.log(e3.stack);
-        }
-        return val;
-    }
-    Put(key, val) {
-        try {
-            this.cache.put(key, val);
-        } catch (e4) {
-            console.log("Error: " + this.id + " -> Put");
-            console.log(e4.stack);
-        }
-    }
-}
-class LocalCache {
-    constructor(cacheName, size){
-        this.localCache = new LfuCache(cacheName, size);
-    }
-    Get(key) {
-        return this.localCache.Get(key);
-    }
-    Put(key, data) {
-        try {
-            this.localCache.Put(key, data);
-        } catch (e5) {
-            console.error("Error At : LocalCache -> Put");
-            console.error(e5.stack);
-        }
-    }
-}
-function fromBrowser(req) {
-    if (!req || !req.headers) return false;
-    const ua = req.headers.get("User-Agent");
-    return ua && ua.startsWith("Mozilla/5.0");
-}
-function jsonHeaders(res) {
-    res.headers.set("Content-Type", "application/json");
-}
-function dnsHeaders(res) {
-    res.headers.set("Accept", "application/dns-message");
-    res.headers.set("Content-Type", "application/dns-message");
-}
-function corsHeaders(res) {
-    res.headers.set("Access-Control-Allow-Origin", "*");
-    res.headers.set("Access-Control-Allow-Headers", "*");
-}
-function browserHeaders(res) {
-    jsonHeaders(res);
-    corsHeaders(res);
-}
-function dohHeaders(req, res) {
-    dnsHeaders(res);
-    if (fromBrowser(req)) corsHeaders(res);
-}
-function arrayBufferOf(buf) {
-    const offset = buf.byteOffset;
-    const len = buf.byteLength;
-    return buf.buffer.slice(offset, offset + len);
-}
-function bufferOf(arrayBuf) {
-    return Buffer.from(new Uint8Array(arrayBuf));
-}
-function uid() {
-    return (Math.random() + 1).toString(36).slice(1);
-}
-function safeBox(fn, defaultResponse = null) {
-    try {
-        return fn();
-    } catch (ignore) {
-    }
-    return defaultResponse;
-}
-function emptyResponse() {
-    return {
-        isException: false,
-        exceptionStack: "",
-        exceptionFrom: "",
-        data: {
-            responseDecodedDnsPacket: null,
-            responseBodyBuffer: null
-        }
-    };
-}
-function errResponse(id, err) {
-    return {
-        isException: true,
-        exceptionStack: err.stack,
-        exceptionFrom: id,
-        data: false
-    };
-}
-class DNSBlockOperation {
-    checkDomainBlocking(userBlocklistFlagUint, userServiceListUint, flagVersion, blocklistMap, blocklistFilter, domainName) {
-        let response;
-        try {
-            response = checkDomainNameUserFlagIntersection(userBlocklistFlagUint, flagVersion, blocklistMap, blocklistFilter, domainName);
-            if (response.isBlocked) {
-                return response;
-            }
-            if (userServiceListUint) {
-                let dnSplit = domainName.split(".");
-                let dnJoin = "";
-                let wildCardResponse;
-                while(dnSplit.shift() != undefined){
-                    dnJoin = dnSplit.join(".");
-                    wildCardResponse = checkDomainNameUserFlagIntersection(userServiceListUint, flagVersion, blocklistMap, blocklistFilter, dnJoin);
-                    if (wildCardResponse.isBlocked) {
-                        return wildCardResponse;
-                    }
-                }
-            }
-        } catch (e6) {
-            throw e6;
-        }
-        return response;
-    }
-}
-function checkDomainNameUserFlagIntersection(userBlocklistFlagUint, flagVersion, blocklistMap, blocklistFilter, domainName) {
-    let response = {
-    };
-    try {
-        response.isBlocked = false;
-        response.blockedB64Flag = "";
-        response.blockedTag = [];
-        if (blocklistMap.has(domainName)) {
-            let domainNameInBlocklistUint = blocklistMap.get(domainName);
-            let blockedUint = blocklistFilter.flagIntersection(userBlocklistFlagUint, domainNameInBlocklistUint);
-            if (blockedUint) {
-                response.isBlocked = true;
-                response.blockedB64Flag = blocklistFilter.getB64FlagFromUint16(blockedUint, flagVersion);
-            } else {
-                blockedUint = new Uint16Array(domainNameInBlocklistUint);
-                response.blockedB64Flag = blocklistFilter.getB64FlagFromUint16(blockedUint, flagVersion);
-            }
-        }
-    } catch (e7) {
-        throw e7;
-    }
-    return response;
 }
 class DNSBlock {
     constructor(){
-        this.dnsParser = new DNSParserWrap();
         this.dnsBlockOperation = new DNSBlockOperation();
-        this.wCache = null;
     }
     async RethinkModule(param) {
         let response = {
@@ -5044,40 +5716,30 @@ class DNSBlock {
                     if (domainNameBlocklistInfo.searchResult) {
                         response.data = this.dnsBlockOperation.checkDomainBlocking(param.userBlocklistInfo.userBlocklistFlagUint, param.userBlocklistInfo.userServiceListUint, param.userBlocklistInfo.flagVersion, domainNameBlocklistInfo.searchResult, param.blocklistFilter, param.requestDecodedDnsPacket.questions[0].name);
                         if (response.data.isBlocked && param.isAggCacheReq) {
-                            if (this.wCache === null) {
-                                this.wCache = caches.default;
-                            }
-                            toCacheApi(param, this.wCache, domainNameBlocklistInfo);
+                            console.debug("blocked dns response add to cache api");
+                            toCacheApi(param, domainNameBlocklistInfo);
                         }
                     }
                 }
             }
-        } catch (e8) {
+        } catch (e11) {
             response.isException = true;
-            response.exceptionStack = e8.stack;
+            response.exceptionStack = e11.stack;
             response.exceptionFrom = "DNSBlock RethinkModule";
             console.error("Error At : DNSBlock -> RethinkModule");
-            console.error(e8.stack);
+            console.error(e11.stack);
         }
         return response;
     }
 }
-function toCacheApi(param, wCache, domainNameBlocklistInfo) {
-    const dn = param.requestDecodedDnsPacket.questions[0].name.trim().toLowerCase() + ":" + param.requestDecodedDnsPacket.questions[0].type;
-    let wCacheUrl = new URL(new URL(param.request.url).origin + "/" + dn);
-    let response = new Response("", {
-        headers: {
-            "x-rethink-metadata": JSON.stringify({
-                ttlEndTime: 0,
-                bodyUsed: false,
-                blocklistInfo: Object.fromEntries(domainNameBlocklistInfo.searchResult)
-            })
-        },
-        cf: {
-            cacheTtl: 604800
-        }
-    });
-    param.event.waitUntil(wCache.put(wCacheUrl, response));
+function toCacheApi(param, domainNameBlocklistInfo) {
+    const key = param.requestDecodedDnsPacket.questions[0].name.trim().toLowerCase() + ":" + param.requestDecodedDnsPacket.questions[0].type;
+    let metaData = {
+        ttlEndTime: 0,
+        bodyUsed: false,
+        blocklistInfo: Object.fromEntries(domainNameBlocklistInfo.searchResult)
+    };
+    param.event.waitUntil(param.dnsCache.putCacheApi(key, param.request.url, "", metaData));
 }
 class DNSResponseBlock {
     constructor(){
@@ -5101,12 +5763,12 @@ class DNSResponseBlock {
                     checkHttpsSvcbBlock(param, response, this.dnsBlockOperation);
                 }
             }
-        } catch (e9) {
+        } catch (e12) {
             response.isException = true;
-            response.exceptionStack = e9.stack;
+            response.exceptionStack = e12.stack;
             response.exceptionFrom = "DNSResponseBlock RethinkModule";
             console.error("Error At : DNSResponseBlock -> RethinkModule");
-            console.error(e9.stack);
+            console.error(e12.stack);
         }
         return response;
     }
@@ -5134,657 +5796,183 @@ function checkCnameBlock(param, response, dnsBlockOperation) {
         }
     }
 }
-const BASE64 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_";
-const config1 = {
-    useBinarySearch: true,
-    debug: false,
-    selectsearch: true,
-    fastPos: true
-};
-const W = 16;
-const bufferView = {
-    15: Uint16Array,
-    16: Uint16Array,
-    6: Uint8Array
-};
-function CHR16(ord) {
-    return CHRM(ord, false);
+const minDNSPacketSize = 12 + 5;
+const dns = new DNSParserWrap();
+const servfail = encode3({
+    type: "response",
+    flags: 4098
+});
+function truncated(ans) {
+    if (ans.length < 12) return false;
+    const flags = ans.readUInt16BE(2);
+    const tc = flags >> 9 & 1;
+    return tc === 1;
 }
-function CHRM(ord, b64) {
-    return b64 ? BASE64[ord] : String.fromCharCode(ord);
+function validResponseSize(r) {
+    return r && r.byteLength >= minDNSPacketSize && r.byteLength <= 4096;
 }
-const ORD = {
-};
-for(let i = 0; i < BASE64.length; i++){
-    ORD[BASE64[i]] = i;
+function dnsqurl(dnsq) {
+    return btoa(String.fromCharCode(...new Uint8Array(dnsq))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }
-function DEC16(chr) {
-    return DECM(chr, false);
+function optAnswer(a) {
+    return a && a.type && a.type.toUpperCase() === "OPT";
 }
-function DECM(chr, b64) {
-    return b64 ? ORD[chr] : chr.charCodeAt(0);
-}
-const L1 = 32 * 32;
-const TxtEnc = new TextEncoder();
-const TxtDec = new TextDecoder();
-const DELIM = "#";
-const ENC_DELIM = TxtEnc.encode(DELIM);
-const periodEncVal = TxtEnc.encode(".");
-function BitString(str) {
-    this.init(str);
-}
-BitString.MaskTop = {
-    16: [
-        65535,
-        32767,
-        16383,
-        8191,
-        4095,
-        2047,
-        1023,
-        511,
-        255,
-        127,
-        63,
-        31,
-        15,
-        7,
-        3,
-        1,
-        0, 
-    ]
-};
-BitString.MaskBottom = {
-    16: [
-        65535,
-        65534,
-        65532,
-        65528,
-        65520,
-        65504,
-        65472,
-        65408,
-        65280,
-        65024,
-        64512,
-        63488,
-        61440,
-        57344,
-        49152,
-        32768,
-        0, 
-    ]
-};
-const BitsSetTable256 = [];
-function initialize() {
-    BitsSetTable256[0] = 0;
-    for(let i1 = 0; i1 < 256; i1++){
-        BitsSetTable256[i1] = (i1 & 1) + BitsSetTable256[Math.floor(i1 / 2)];
+const quad1 = "1.1.1.2";
+class DNSResolver {
+    constructor(){
+        this.http2 = null;
+        this.transport = null;
+        this.dnsParser = new DNSParserWrap();
+    }
+    async lazyInit() {
+        if (isNode() && !this.http2) {
+            this.http2 = await import("http2");
+        }
+        if (isNode() && !this.transport) {
+            this.transport = new (await import("../helpers/node/dns-transport.js")).Transport(quad1, 53);
+        }
+    }
+    async RethinkModule(param) {
+        await this.lazyInit();
+        let response = emptyResponse();
+        try {
+            response.data = await this.resolveDns(param);
+        } catch (e13) {
+            response = errResponse("dnsResolver", e13);
+            log.e("Err DNSResolver -> RethinkModule", e13);
+        }
+        return response;
+    }
+    async resolveDns(param) {
+        let resp = {
+        };
+        const key = (param.requestDecodedDnsPacket.questions.length > 0 ? param.requestDecodedDnsPacket.questions[0].name : "").trim().toLowerCase() + ":" + param.requestDecodedDnsPacket.questions[0].type;
+        let cacheResponse = await param.dnsCache.get(key, param.request.url);
+        const now = Date.now();
+        if (cacheResponse) {
+            console.debug("Response Found in cache", JSON.stringify(cacheResponse));
+            resp.responseDecodedDnsPacket = cacheResponse.decodedDnsPacket;
+            resp.responseDecodedDnsPacket.id = param.requestDecodedDnsPacket.id;
+            this.updateTtl(cacheResponse.decodedDnsPacket, cacheResponse.metaData.ttlEndTime);
+            resp.responseBodyBuffer = this.dnsParser.encode(cacheResponse.decodedDnsPacket);
+            return resp;
+        }
+        const upRes = await this.resolveDnsUpstream(param.request, param.dnsResolverUrl, param.requestBodyBuffer);
+        resp = await decodeResponse(upRes, this.dnsParser);
+        let minttl = 0;
+        for (let answer1 of resp.responseDecodedDnsPacket.answers){
+            minttl = minttl <= 0 || minttl > answer1.ttl ? answer1.ttl : minttl;
+        }
+        const ttlEndTime = minttl * 1000 + now;
+        let cacheInput = {
+        };
+        cacheInput.metaData = cacheMetadata(resp.responseDecodedDnsPacket, ttlEndTime, param.blocklistFilter);
+        cacheInput.decodedDnsPacket = resp.responseDecodedDnsPacket;
+        param.event.waitUntil(param.dnsCache.put(key, cacheInput, param.request.url, resp.responseBodyBuffer));
+        return resp;
+    }
+    updateTtl(decodedDnsPacket, end) {
+        const now = Date.now();
+        const outttl = Math.max(Math.floor((end - now) / 1000), 30);
+        for (let a of decodedDnsPacket.answers){
+            if (!optAnswer(a)) a.ttl = outttl;
+        }
     }
 }
-function countSetBits(n) {
-    return BitsSetTable256[n & 255] + BitsSetTable256[n >>> 8 & 255] + BitsSetTable256[n >>> 16 & 255] + BitsSetTable256[n >>> 24];
-}
-function bit0(n, p, pad) {
-    const r = bit0p(n, p);
-    if (r.scanned <= 0) return r.scanned;
-    if (r.index > 0) return r.scanned;
-    if (pad > r.scanned) return r.scanned + 1;
-    else return 0;
-}
-function bit0p(n, p) {
-    if (p == 0) return {
-        index: 0,
-        scanned: 0
-    };
-    if (n == 0 && p == 1) return {
-        index: 1,
-        scanned: 1
-    };
-    let c = 0, i2 = 0;
-    for(c = 0; n > 0 && p > c; n = n >>> 1){
-        c = c + (n < (n ^ 1)) ? 1 : 0;
-        i2 += 1;
-    }
+function cacheMetadata(dnsPacket, ttlEndTime, blocklistFilter) {
+    const question1 = dnsPacket.questions.length > 0 ? dnsPacket.questions[0].name : "";
     return {
-        index: p == c ? i2 : 0,
-        scanned: i2
+        ttlEndTime: ttlEndTime,
+        bodyUsed: true,
+        blocklistInfo: objOf(blocklistFilter.getDomainInfo(question1).searchResult)
     };
 }
-BitString.prototype = {
-    init: function(str) {
-        this.bytes = str;
-        this.length = this.bytes.length * W;
-    },
-    getData: function() {
-        return this.bytes;
-    },
-    encode: function(n) {
-        const e10 = [];
-        for(let i3 = 0; i3 < this.length; i3 += n){
-            e10.push(this.get(i3, Math.min(this.length, n)));
-        }
-        return e10;
-    },
-    get: function(p, n, debug = false) {
-        if (p % W + n <= W) {
-            return (this.bytes[p / W | 0] & BitString.MaskTop[W][p % W]) >> W - p % W - n;
-        } else {
-            let result = this.bytes[p / W | 0] & BitString.MaskTop[W][p % W];
-            let tmpCount = 0;
-            const disp1 = this.bytes[p / W | 0];
-            const disp2 = BitString.MaskTop[W][p % W];
-            const res1 = result;
-            const l2 = W - p % W;
-            p += l2;
-            n -= l2;
-            while(n >= W){
-                tmpCount++;
-                result = result << W | this.bytes[p / W | 0];
-                p += W;
-                n -= W;
-            }
-            const res2 = result;
-            if (n > 0) {
-                result = result << n | this.bytes[p / W | 0] >> W - n;
-            }
-            if (debug == true) {
-                console.log("disp1: " + disp1 + " disp2: " + disp2 + " loopcount: " + tmpCount + " res1: " + res1 + " res2: " + res2 + " r: " + result);
-            }
-            return result;
-        }
-    },
-    count: function(p, n) {
-        let count = 0;
-        while(n >= 16){
-            count += BitsSetTable256[this.get(p, 16)];
-            p += 16;
-            n -= 16;
-        }
-        return count + BitsSetTable256[this.get(p, n)];
-    },
-    pos0: function(i4, n) {
-        if (n < 0) return 0;
-        let step = 16;
-        let index = i4;
-        if (config1.fastPos === false) {
-            while(n > 0){
-                step = n <= 16 ? n : 16;
-                const bits0 = step - countSetBits(this.get(i4, step));
-                n -= bits0;
-                i4 += step;
-                index = i4 - 1;
-            }
-            return index;
-        }
-        while(n > 0){
-            const d = this.get(i4, step);
-            const bits0 = step - countSetBits(d);
-            if (n - bits0 < 0) {
-                step = Math.max(n, step / 2 | 0);
-                continue;
-            }
-            n -= bits0;
-            i4 += step;
-            const diff = n === 0 ? bit0(d, 1, step) : 1;
-            index = i4 - diff;
-        }
-        return index;
-    },
-    rank: function(x) {
-        let rank = 0;
-        for(let i5 = 0; i5 <= x; i5++){
-            if (this.get(i5, 1)) {
-                rank++;
-            }
-        }
-        return rank;
-    }
-};
-function RankDirectory(directoryData, bitData, numBits, l1Size, l2Size) {
-    this.init(directoryData, bitData, numBits, l1Size, l2Size);
-}
-RankDirectory.prototype = {
-    init: function(directoryData, trieData, numBits, l1Size, l2Size) {
-        this.directory = new BitString(directoryData);
-        this.data = new BitString(trieData);
-        this.l1Size = l1Size;
-        this.l2Size = l2Size;
-        this.l1Bits = Math.ceil(Math.log2(numBits));
-        this.l2Bits = Math.ceil(Math.log2(l1Size));
-        this.sectionBits = (l1Size / l2Size - 1) * this.l2Bits + this.l1Bits;
-        this.numBits = numBits;
-    },
-    getData: function() {
-        return this.directory.getData();
-    },
-    rank: function(which, x) {
-        if (config1.selectsearch) {
-            let rank = -1;
-            let sectionPos = 0;
-            if (x >= this.l2Size) {
-                sectionPos = (x / this.l2Size | 0) * this.l1Bits;
-                rank = this.directory.get(sectionPos - this.l1Bits, this.l1Bits);
-                x = x % this.l2Size;
-            }
-            const ans = x > 0 ? this.data.pos0(rank + 1, x) : rank;
-            if (config1.debug) {
-                console.log("ans: " + ans + " " + rank + ":r, x: " + x + " " + sectionPos + ":s " + this.l1Bits + ": l1");
-            }
-            return ans;
-        }
-        if (which === 0) {
-            return x - this.rank(1, x) + 1;
-        }
-        let rank = 0;
-        let o = x;
-        let sectionPos = 0;
-        if (o >= this.l1Size) {
-            sectionPos = (o / this.l1Size | 0) * this.sectionBits;
-            rank = this.directory.get(sectionPos - this.l1Bits, this.l1Bits);
-            o = o % this.l1Size;
-        }
-        if (o >= this.l2Size) {
-            sectionPos += (o / this.l2Size | 0) * this.l2Bits;
-            rank += this.directory.get(sectionPos - this.l2Bits, this.l2Bits);
-        }
-        rank += this.data.count(x - x % this.l2Size, x % this.l2Size + 1);
-        return rank;
-    },
-    select: function(which, y) {
-        let high = this.numBits;
-        let low = -1;
-        let val = -1;
-        let iter = 0;
-        if (config1.selectsearch) {
-            return this.rank(0, y);
-        }
-        while(high - low > 1){
-            const probe = (high + low) / 2 | 0;
-            const r = this.rank(which, probe);
-            iter += 1;
-            if (r === y) {
-                val = probe;
-                high = probe;
-            } else if (r < y) {
-                low = probe;
-            } else {
-                high = probe;
-            }
-        }
-        return val;
-    }
-};
-function Tags(flags) {
-    this.init();
-    this.setupFlags(flags);
-}
-Tags.prototype = {
-    init: function(flags) {
-        this.flags = {
-        };
-        this.rflags = {
-        };
-        this.fsize = 0;
-    },
-    setupFlags: function(flags) {
-        let i6 = 0;
-        for (const f of flags){
-            this.flags[f] = i6++;
-        }
-        this.rflags = flags;
-        this.fsize = Math.ceil(Math.log2(flags.length) / 16) + 1;
-    },
-    flagsToTag: function(flags) {
-        const header1 = flags[0];
-        const tagIndices = [];
-        const values = [];
-        for(let i8 = 0, mask = 32768; i8 < 16; i8++){
-            if (header1 << i8 === 0) break;
-            if ((header1 & mask) === mask) {
-                tagIndices.push(i8);
-            }
-            mask = mask >>> 1;
-        }
-        if (tagIndices.length !== flags.length - 1) {
-            console.log(tagIndices, flags, "flags and header mismatch (bug in upsert?)");
-            return values;
-        }
-        for(let i7 = 0; i7 < flags.length; i7++){
-            const flag = flags[i7 + 1];
-            const index = tagIndices[i7];
-            for(let j = 0, mask = 32768; j < 16; j++){
-                if (flag << j === 0) break;
-                if ((flag & mask) === mask) {
-                    const pos = index * 16 + j;
-                    if (config1.debug) {
-                        console.log("pos", pos, "index/tagIndices", index, tagIndices, "j/i", j, i7);
-                    }
-                    values.push(this.rflags[pos]);
-                }
-                mask = mask >>> 1;
-            }
-        }
-        return values;
-    }
-};
-function FrozenTrieNode(trie, index) {
-    this.trie = trie;
-    this.index = index;
-    let finCached, whCached, comCached, fcCached, chCached, valCached, flagCached;
-    this.final = ()=>{
-        if (typeof finCached === "undefined") {
-            finCached = this.trie.data.get(this.trie.letterStart + index * this.trie.bitslen + this.trie.extraBit, 1) === 1;
-        }
-        return finCached;
-    };
-    this.where = ()=>{
-        if (typeof whCached === "undefined") {
-            whCached = this.trie.data.get(this.trie.letterStart + index * this.trie.bitslen + 1 + this.trie.extraBit, this.trie.bitslen - 1 - this.trie.extraBit);
-        }
-        return whCached;
-    };
-    this.compressed = ()=>{
-        if (typeof comCached === "undefined") {
-            comCached = this.trie.data.get(this.trie.letterStart + index * this.trie.bitslen, 1) === 1;
-        }
-        return comCached;
-    };
-    this.flag = ()=>{
-        if (typeof flagCached === "undefined") {
-            flagCached = this.compressed() && this.final();
-        }
-        return flagCached;
-    };
-    this.letter = ()=>this.where()
-    ;
-    this.firstChild = ()=>{
-        if (!fcCached) fcCached = this.trie.directory.select(0, index + 1) - index;
-        return fcCached;
-    };
-    if (config1.debug) {
-        console.log(index + " :i, fc: " + this.firstChild() + " tl: " + this.letter() + " c: " + this.compressed() + " f: " + this.final() + " wh: " + this.where() + " flag: " + this.flag());
-    }
-    this.childOfNextNode = ()=>{
-        if (!chCached) {
-            chCached = this.trie.directory.select(0, index + 2) - index - 1;
-        }
-        return chCached;
-    };
-    this.childCount = ()=>this.childOfNextNode() - this.firstChild()
-    ;
-    this.value = ()=>{
-        if (typeof valCached === "undefined") {
-            const value = [];
-            let i9 = 0;
-            let j = 0;
-            if (config1.debug) {
-                console.log("thisnode: index/vc/ccount ", this.index, this.letter(), this.childCount());
-            }
-            while(i9 < this.childCount()){
-                const valueChain = this.getChild(i9);
-                if (config1.debug) {
-                    console.log("vc no-flag end vlet/vflag/vindex/val ", i9, valueChain.letter(), valueChain.flag(), valueChain.index, value);
-                }
-                if (!valueChain.flag()) {
-                    break;
-                }
-                if (i9 % 2 === 0) {
-                    value.push(valueChain.letter() << 8);
-                } else {
-                    value[j] = value[j] | valueChain.letter();
-                    j += 1;
-                }
-                i9 += 1;
-            }
-            valCached = value;
-        }
-        return valCached;
-    };
-}
-FrozenTrieNode.prototype = {
-    getChildCount: function() {
-        return this.childCount();
-    },
-    getChild: function(index) {
-        return this.trie.getNodeByIndex(this.firstChild() + index);
-    }
-};
-function FrozenTrie(data, rdir, nodeCount) {
-    this.init(data, rdir, nodeCount);
-}
-FrozenTrie.prototype = {
-    init: function(trieData, rdir, nodeCount) {
-        this.data = new BitString(trieData);
-        this.directory = rdir;
-        this.extraBit = 1;
-        this.bitslen = 9 + this.extraBit;
-        this.letterStart = nodeCount * 2 + 1;
-    },
-    getNodeByIndex: function(index) {
-        return new FrozenTrieNode(this, index);
-    },
-    getRoot: function() {
-        return this.getNodeByIndex(0);
-    },
-    lookup: function(word) {
-        const index = word.lastIndexOf(ENC_DELIM[0]);
-        if (index > 0) word = word.slice(0, index);
-        const debug = config1.debug;
-        let node = this.getRoot();
-        let child;
-        let returnValue = false;
-        for(let i10 = 0; i10 < word.length; i10++){
-            let isFlag = -1;
-            let that;
-            if (periodEncVal[0] == word[i10]) {
-                if (node.final()) {
-                    if (returnValue == false) returnValue = new Map();
-                    returnValue.set(TxtDec.decode(word.slice(0, i10).reverse()), node.value());
-                }
-            }
-            do {
-                that = node.getChild(isFlag + 1);
-                if (!that.flag()) break;
-                isFlag += 1;
-            }while (isFlag + 1 < node.getChildCount())
-            const minChild = isFlag;
-            if (debug) {
-                console.log("            count: " + node.getChildCount() + " i: " + i10 + " w: " + word[i10] + " nl: " + node.letter() + " flag: " + isFlag);
-            }
-            if (node.getChildCount() - 1 <= minChild) {
-                if (debug) {
-                    console.log("  no more children left, remaining word: " + word.slice(i10));
-                }
-                return returnValue;
-            }
-            if (config1.useBinarySearch === false) {
-                let j = isFlag;
-                for(; j < node.getChildCount(); j++){
-                    child = node.getChild(j);
-                    if (debug) {
-                        console.log("it: " + j + " tl: " + child.letter() + " wl: " + word[i10]);
-                    }
-                    if (child.letter() == word[i10]) {
-                        if (debug) console.log("it: " + j + " break ");
-                        break;
-                    }
-                }
-                if (j === node.getChildCount()) {
-                    if (debug) console.log("j: " + j + " c: " + node.getChildCount());
-                    return returnValue;
-                }
-            } else {
-                let high = node.getChildCount();
-                let low = isFlag;
-                while(high - low > 1){
-                    const probe = (high + low) / 2 | 0;
-                    child = node.getChild(probe);
-                    const prevchild = probe > isFlag ? node.getChild(probe - 1) : undefined;
-                    if (debug) {
-                        console.log("        current: " + child.letter() + " l: " + low + " h: " + high + " w: " + word[i10]);
-                    }
-                    if (child.compressed() || prevchild && prevchild.compressed() && !prevchild.flag()) {
-                        const startchild = [];
-                        const endchild = [];
-                        let start = 0;
-                        let end = 0;
-                        startchild.push(child);
-                        start += 1;
-                        do {
-                            const temp = node.getChild(probe - start);
-                            if (!temp.compressed()) break;
-                            if (temp.flag()) break;
-                            startchild.push(temp);
-                            start += 1;
-                        }while (true)
-                        if (startchild[start - 1].letter() > word[i10]) {
-                            if (debug) {
-                                console.log("        shrinkh start: " + startchild[start - 1].letter() + " s: " + start + " w: " + word[i10]);
-                            }
-                            high = probe - start + 1;
-                            if (high - low <= 1) {
-                                if (debug) {
-                                    console.log("...h-low: " + (high - low) + " c: " + node.getChildCount(), high, low, child.letter(), word[i10], probe);
-                                }
-                                return returnValue;
-                            }
-                            continue;
-                        }
-                        if (child.compressed()) {
-                            do {
-                                end += 1;
-                                const temp = node.getChild(probe + end);
-                                endchild.push(temp);
-                                if (!temp.compressed()) break;
-                            }while (true)
-                        }
-                        if (startchild[start - 1].letter() < word[i10]) {
-                            if (debug) {
-                                console.log("        shrinkl start: " + startchild[start - 1].letter() + " s: " + start + " w: " + word[i10]);
-                            }
-                            low = probe + end;
-                            if (high - low <= 1) {
-                                if (debug) {
-                                    console.log("...h-low: " + (high - low) + " c: " + node.getChildCount(), high, low, child.letter(), word[i10], probe);
-                                }
-                                return returnValue;
-                            }
-                            continue;
-                        }
-                        const nodes = startchild.reverse().concat(endchild);
-                        const comp = nodes.map((n)=>n.letter()
-                        );
-                        const w = word.slice(i10, i10 + comp.length);
-                        if (debug) {
-                            console.log("it: " + probe + " tl: " + comp + " wl: " + w + " c: " + child.letter());
-                        }
-                        if (w.length < comp.length) return returnValue;
-                        for(let i11 = 0; i11 < comp.length; i11++){
-                            if (w[i11] !== comp[i11]) return returnValue;
-                        }
-                        if (debug) console.log("it: " + probe + " break ");
-                        child = nodes[nodes.length - 1];
-                        i10 += comp.length - 1;
-                        break;
-                    } else {
-                        if (child.letter() === word[i10]) {
-                            break;
-                        } else if (word[i10] > child.letter()) {
-                            low = probe;
-                        } else {
-                            high = probe;
-                        }
-                    }
-                    if (high - low <= 1) {
-                        if (debug) {
-                            console.log("h-low: " + (high - low) + " c: " + node.getChildCount(), high, low, child.letter(), word[i10], probe);
-                        }
-                        return returnValue;
-                    }
-                }
-            }
-            if (debug) console.log("        next: " + child.letter());
-            node = child;
-        }
-        if (node.final()) {
-            if (returnValue == false) returnValue = new Map();
-            returnValue.set(TxtDec.decode(word.reverse()), node.value());
-        }
-        return returnValue;
-    }
-};
-function customTagToFlag(fl, blocklistFileTag) {
-    let res = CHR16(0);
-    for (const flag of fl){
-        const val = blocklistFileTag[flag].value;
-        const header = 0;
-        const index = val / 16 | 0;
-        const pos = val % 16;
-        let h = 0;
-        h = DEC16(res[header]);
-        const dataIndex = countSetBits(h & BitString.MaskBottom[16][16 - index]) + 1;
-        let n = (h >>> 15 - index & 1) !== 1 ? 0 : DEC16(res[dataIndex]);
-        const upsertData = n !== 0;
-        h |= 1 << 15 - index;
-        n |= 1 << 15 - pos;
-        res = CHR16(h) + res.slice(1, dataIndex) + CHR16(n) + res.slice(upsertData ? dataIndex + 1 : dataIndex);
-    }
-    return res;
-}
-function createBlocklistFilter(tdbuf, rdbuf, blocklistFileTag, blocklistBasicConfig) {
-    initialize();
+DNSResolver.prototype.resolveDnsUpstream = async function(request, resolverUrl, requestBodyBuffer) {
     try {
-        let tag = {
-        };
-        let fl = [];
-        for(const fileuname in blocklistFileTag){
-            if (!blocklistFileTag.hasOwnProperty(fileuname)) continue;
-            fl[blocklistFileTag[fileuname].value] = fileuname;
-            const v = DELIM + blocklistFileTag[fileuname].uname;
-            tag[fileuname] = v.split("").reverse().join("");
+        if (this.transport) {
+            const q = bufferOf(requestBodyBuffer);
+            let ans = await this.transport.udpquery(q);
+            if (ans && truncated(ans)) {
+                log.w("ans truncated, retrying over tcp");
+                ans = await this.transport.tcpquery(q);
+            }
+            return ans ? new Response(arrayBufferOf(ans)) : new Response(null, {
+                status: 503
+            });
         }
-        const tags = new Tags(fl);
-        const tdv = new bufferView[16](tdbuf);
-        const rdv = new bufferView[16](rdbuf);
-        const nc = blocklistBasicConfig.nodecount;
-        const numbits = blocklistBasicConfig.nodecount * 2 + 1;
-        const rd = new RankDirectory(rdv, tdv, numbits, L1, 32);
-        const frozentrie = new FrozenTrie(tdv, rd, nc);
-        return {
-            t: tags,
-            ft: frozentrie
-        };
-    } catch (e11) {
-        throw e11;
-    }
-}
-const ALPHA32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-function readChar(chr) {
-    chr = chr.toUpperCase();
-    const idx = ALPHA32.indexOf(chr);
-    if (idx === -1) {
-        throw new Error("invalid b32 character: " + chr);
-    }
-    return idx;
-}
-function rbase32(input) {
-    input = input.replace(/=+$/, "");
-    const length = input.length;
-    let bits = 0;
-    let value = 0;
-    let index = 0;
-    let output = new Uint8Array(length * 5 / 8 | 0);
-    for(var i29 = 0; i29 < length; i29++){
-        value = value << 5 | readChar(input[i29]);
-        bits += 5;
-        if (bits >= 8) {
-            output[index++] = value >>> bits - 8 & 255;
-            bits -= 8;
+        let u = new URL(request.url);
+        let dnsResolverUrl = new URL(resolverUrl);
+        u.hostname = dnsResolverUrl.hostname;
+        u.pathname = dnsResolverUrl.pathname;
+        u.port = dnsResolverUrl.port;
+        u.protocol = dnsResolverUrl.protocol;
+        let newRequest = null;
+        if (request.method === "GET" || isWorkers() && request.method === "POST") {
+            u.search = "?dns=" + dnsqurl(requestBodyBuffer);
+            newRequest = new Request(u.href, {
+                method: "GET"
+            });
+        } else if (request.method === "POST") {
+            newRequest = new Request(u.href, {
+                method: "POST",
+                headers: {
+                    "Content-Length": requestBodyBuffer.byteLength
+                },
+                body: requestBodyBuffer
+            });
+        } else {
+            throw new Error("get/post requests only");
         }
+        dnsHeaders(newRequest);
+        return this.http2 ? this.doh2(newRequest) : fetch(newRequest);
+    } catch (e14) {
+        throw e14;
     }
-    return output;
-}
+};
+DNSResolver.prototype.doh2 = async function(request) {
+    console.debug("upstream using h2");
+    const http2 = this.http2;
+    const u = new URL(request.url);
+    const reqB = bufferOf(await request.arrayBuffer());
+    const headers1 = {
+    };
+    request.headers.forEach((v, k)=>{
+        headers1[k] = v;
+    });
+    return new Promise((resolve, reject)=>{
+        const authority = u.origin;
+        const c = http2.connect(authority);
+        c.on("error", (err)=>{
+            reject(err.message);
+        });
+        const req = c.request({
+            [http2.constants.HTTP2_HEADER_METHOD]: request.method,
+            [http2.constants.HTTP2_HEADER_PATH]: `${u.pathname}`,
+            ...headers1
+        });
+        req.on("response", (headers)=>{
+            const resBuffers = [];
+            const resH = {
+            };
+            for(const k in headers){
+                if (k.startsWith(":")) resH[k.slice(1)] = headers[k];
+                else resH[k] = headers[k];
+            }
+            req.on("data", (chunk)=>{
+                resBuffers.push(chunk);
+            });
+            req.on("end", ()=>{
+                const resB = Buffer.concat(resBuffers);
+                c.close();
+                resolve(new Response(resB, resH));
+            });
+            req.on("error", (err)=>{
+                reject(err.message);
+            });
+        });
+        req.end(reqB);
+    });
+};
 class BlocklistFilter {
     constructor(){
         this.t = null;
@@ -5808,16 +5996,16 @@ class BlocklistFilter {
         this.ft = ft;
         this.blocklistBasicConfig = blocklistBasicConfig;
         this.blocklistFileTag = blocklistFileTag;
-        this.domainNameCache = new LocalCache("Domain-Name-Cache", 5000);
+        this.domainNameCache = new DomainNameCache(20000);
     }
     getDomainInfo(domainName) {
         domainName = domainName.trim().toLowerCase();
-        let domainNameInfo = this.domainNameCache.Get(domainName);
+        let domainNameInfo = this.domainNameCache.get(domainName);
         if (!domainNameInfo) {
             domainNameInfo = {
             };
             domainNameInfo.searchResult = this.hadDomainName(domainName);
-            this.domainNameCache.Put(domainName, domainNameInfo);
+            this.domainNameCache.put(domainName, domainNameInfo);
         }
         return domainNameInfo;
     }
@@ -5876,8 +6064,8 @@ class BlocklistFilter {
                 intersectFlag[count++] = bodyData;
             }
             return intersectFlag;
-        } catch (e12) {
-            throw e12;
+        } catch (e15) {
+            throw e15;
         }
     }
     customTagToFlag(tagList) {
@@ -5890,8 +6078,8 @@ class BlocklistFilter {
             } else if (flagVersion == "1") {
                 return "1:" + encodeURI(btoa(encodeToBinary(customTagToFlag(tagList, this.blocklistFileTag))).replace(/\//g, "_").replace(/\+/g, "-"));
             }
-        } catch (e13) {
-            throw e13;
+        } catch (e16) {
+            throw e16;
         }
     }
     getB64FlagFromUint16(arr, flagVersion) {
@@ -5901,99 +6089,60 @@ class BlocklistFilter {
             } else if (flagVersion == "1") {
                 return "1:" + encodeURI(btoa(encodeUint16arrToBinary(arr)).replace(/\//g, "_").replace(/\+/g, "-"));
             }
-        } catch (e14) {
-            throw e14;
+        } catch (e17) {
+            throw e17;
         }
     }
 }
-function encodeUint16arrToBinary(uint16Arr) {
-    return String.fromCharCode(...new Uint8Array(uint16Arr.buffer));
+function encode3(obj) {
+    return dns.encode(obj);
 }
-function encodeToBinary(s) {
-    const codeUnits = new Uint16Array(s.length);
-    for(let i30 = 0; i30 < codeUnits.length; i30++){
-        codeUnits[i30] = s.charCodeAt(i30);
+function decode3(buf) {
+    return dns.decode(buf);
+}
+class DNSAggCache {
+    constructor(){
+        this.dnsBlockOperation = new DNSBlockOperation();
+        this.blocklistFilter = new BlocklistFilter();
     }
-    return String.fromCharCode(...new Uint8Array(codeUnits.buffer));
-}
-const b64delim = ":";
-const b32delim = "+";
-function isB32(s) {
-    return s.indexOf(b32delim) > 0;
-}
-function version(s) {
-    if (s && s.length > 1) return s[0];
-    else return "0";
-}
-function toUint(flag) {
-    try {
-        const response = {
+    async RethinkModule(param) {
+        let response = {
         };
-        response.userBlocklistFlagUint = "";
-        response.flagVersion = "0";
-        flag = flag ? flag.trim() : "";
-        if (flag.length <= 0) {
-            return response;
+        response.isException = false;
+        response.exceptionStack = "";
+        response.exceptionFrom = "";
+        response.data = null;
+        try {
+            if (!param.isDnsMsg) {
+                return response;
+            }
+            response.data = await this.aggCache(param);
+        } catch (e18) {
+            response.isException = true;
+            response.exceptionStack = e18.stack;
+            response.exceptionFrom = "DNSAggCache RethinkModule";
+            console.error("Error At : DNSAggCache -> RethinkModule");
+            console.error(e18.stack);
         }
-        const isFlagB32 = isB32(flag);
-        let s = flag.split(isFlagB32 ? b32delim : b64delim);
-        let convertor = (x)=>""
-        ;
-        let f = "";
-        const v = version(s);
-        if (v == "0") {
-            convertor = Base64ToUint;
-            f = s[0];
-        } else if (v == "1") {
-            convertor = isFlagB32 ? Base32ToUint_v1 : Base64ToUint_v1;
-            f = s[1];
-        } else {
-            throw new Error("unknown blocklist stamp version in " + s);
-        }
-        response.flagVersion = v;
-        response.userBlocklistFlagUint = convertor(f) || "";
         return response;
-    } catch (e15) {
-        throw e15;
     }
-}
-function Base64ToUint(b64Flag) {
-    const buff = Buffer.from(decodeURIComponent(b64Flag), "base64");
-    const str = buff.toString("utf-8");
-    const uint = [];
-    for(let i31 = 0; i31 < str.length; i31++){
-        uint[i31] = str.charCodeAt(i31);
+    async aggCache(param) {
+        let response = {
+        };
+        response.reqDecodedDnsPacket = decode3(param.requestBodyBuffer);
+        response.aggCacheResponse = {
+        };
+        response.aggCacheResponse.type = "none";
+        if (param.isAggCacheReq) {
+            const key = (response.reqDecodedDnsPacket.questions.length > 0 ? response.reqDecodedDnsPacket.questions[0].name : "").trim().toLowerCase() + ":" + response.reqDecodedDnsPacket.questions[0].type;
+            let cacheResponse = await param.dnsCache.get(key, param.request.url);
+            console.debug("Cache Response", JSON.stringify(cacheResponse));
+            if (cacheResponse) {
+                response.aggCacheResponse = await parseCacheResponse(cacheResponse, this.dnsBlockOperation, this.blocklistFilter, param.userBlocklistInfo, response.reqDecodedDnsPacket);
+            }
+        }
+        return response;
     }
-    return uint;
-}
-function Base64ToUint_v1(b64Flag) {
-    let str = decodeURI(b64Flag);
-    str = decodeFromBinary(atob(str.replace(/_/g, "/").replace(/-/g, "+")));
-    const uint = [];
-    for(let i32 = 0; i32 < str.length; i32++){
-        uint[i32] = str.charCodeAt(i32);
-    }
-    return uint;
-}
-function Base32ToUint_v1(flag) {
-    let str = decodeURI(flag);
-    str = decodeFromBinaryArray(rbase32(str));
-    const uint = [];
-    for(let i33 = 0; i33 < str.length; i33++){
-        uint[i33] = str.charCodeAt(i33);
-    }
-    return uint;
-}
-function decodeFromBinary(b, u8) {
-    if (u8) return String.fromCharCode(...new Uint16Array(b.buffer));
-    const bytes = new Uint8Array(b.length);
-    for(let i34 = 0; i34 < bytes.length; i34++){
-        bytes[i34] = b.charCodeAt(i34);
-    }
-    return String.fromCharCode(...new Uint16Array(bytes.buffer));
-}
-function decodeFromBinaryArray(b) {
-    return decodeFromBinary(b, true);
 }
 class BlocklistWrapper {
     constructor(){
@@ -6036,11 +6185,11 @@ class BlocklistWrapper {
                 response.exceptionStack = this.exceptionStack ? this.exceptionStack : "Problem in loading blocklistFilter - Waiting Timeout";
                 response.exceptionFrom = this.exceptionFrom ? this.exceptionFrom : "blocklistWrapper.js RethinkModule";
             }
-        } catch (e16) {
+        } catch (e19) {
             response.isException = true;
-            response.exceptionStack = e16.stack;
+            response.exceptionStack = e19.stack;
             response.exceptionFrom = "blocklistWrapper.js RethinkModule";
-            log.e("Error At -> BlocklistWrapper RethinkModule", e16);
+            log.e("Error At -> BlocklistWrapper RethinkModule", e19);
         }
         return response;
     }
@@ -6060,17 +6209,111 @@ class BlocklistWrapper {
             log.d("done blocklist filter");
             this.isBlocklistUnderConstruction = false;
             response.data.blocklistFilter = this.blocklistFilter;
-        } catch (e17) {
+        } catch (e20) {
             this.isBlocklistUnderConstruction = false;
             response.isException = true;
-            response.exceptionStack = e17.stack;
+            response.exceptionStack = e20.stack;
             response.exceptionFrom = "blocklistWrapper.js initBlocklistConstruction";
             this.exceptionFrom = response.exceptionFrom;
             this.exceptionStack = response.exceptionStack;
-            log.e(e17);
+            log.e(e20);
         }
         return response;
     }
+}
+class DnsCache {
+    constructor(size){
+        this.localCache = new LfuCache("DnsCache", size);
+        this.cacheApi = new CacheApi();
+    }
+    async get(key, url) {
+        let entry = this.getLocalCache(key);
+        if (entry) {
+            console.debug(Date.now(), entry.metaData.ttlEndTime, Date.now() <= entry.metaData.ttlEndTime, Date.now() - entry.metaData.ttlEndTime);
+        }
+        if (entry && Date.now() <= entry.metaData.ttlEndTime) {
+            return entry;
+        }
+        console.debug("is workerset : ", isWorkers(), url && isWorkers());
+        if (url && isWorkers()) {
+            entry = await validateCacheApiResponse(await this.cacheApi.get(makeCacheApiKey(key, url)));
+            if (entry) {
+                this.putLocalCache(key, entry);
+                return entry;
+            }
+        }
+        return false;
+    }
+    async put(key, data, url, buf) {
+        this.putLocalCache(key, data);
+        if (url && isWorkers()) {
+            await this.putCacheApi(key, url, buf, data.metaData);
+        }
+    }
+    putLocalCache(key, data) {
+        try {
+            this.localCache.Put(key, data);
+        } catch (e21) {
+            console.error("Error At : DnsCache -> put");
+            console.error(e21.stack);
+        }
+    }
+    getLocalCache(key) {
+        return this.localCache.Get(key);
+    }
+    async putCacheApi(key, url, buf, metadata) {
+        let response = createResponse(buf, metadata);
+        this.cacheApi.put(makeCacheApiKey(key, url), response);
+    }
+}
+async function decodeResponse(response, dnsParser) {
+    if (!response) throw new Error("no upstream result");
+    if (!response.ok) {
+        log.d("!OK", response.status, response.statusText, await response.text());
+        throw new Error(response.status + " http err: " + response.statusText);
+    }
+    let retResponse = {
+    };
+    retResponse.responseBodyBuffer = await response.arrayBuffer();
+    if (!validResponseSize(retResponse.responseBodyBuffer)) {
+        throw new Error("Null / invalid response from upstream");
+    }
+    try {
+        retResponse.responseDecodedDnsPacket = dnsParser.decode(retResponse.responseBodyBuffer);
+    } catch (e22) {
+        log.e("decode fail " + response.status + " cache? " + responseBodyBuffer);
+        throw e22;
+    }
+    return retResponse;
+}
+async function parseCacheResponse(cacheResponse, dnsBlockOperation, blocklistFilter, userBlocklistInfo, reqDecodedDnsPacket) {
+    let response = {
+    };
+    response.type = "none";
+    response.data = {
+    };
+    if ((reqDecodedDnsPacket.questions[0].type == "A" || reqDecodedDnsPacket.questions[0].type == "AAAA" || reqDecodedDnsPacket.questions[0].type == "CNAME" || reqDecodedDnsPacket.questions[0].type == "HTTPS" || reqDecodedDnsPacket.questions[0].type == "SVCB") && cacheResponse.metaData.blocklistInfo && userBlocklistInfo.userBlocklistFlagUint !== "") {
+        const blocklistInfoMap = new Map(Object.entries(cacheResponse.metaData.blocklistInfo));
+        let blockResponse = dnsBlockOperation.checkDomainBlocking(userBlocklistInfo.userBlocklistFlagUint, userBlocklistInfo.userServiceListUint, userBlocklistInfo.flagVersion, blocklistInfoMap, blocklistFilter, reqDecodedDnsPacket.questions[0].name.trim().toLowerCase());
+        if (blockResponse.isBlocked) {
+            response.type = "blocked";
+            response.data = blockResponse;
+            return response;
+        }
+    }
+    if (cacheResponse.metaData.bodyUsed) {
+        const now = Date.now();
+        if (now <= cacheResponse.metaData.ttlEndTime) {
+            response.type = "response";
+            response.data.decodedDnsPacket = cacheResponse.decodedDnsPacket;
+            const outttl = Math.max(Math.floor((cacheResponse.metaData.ttlEndTime - now) / 1000), 1);
+            for (let answer2 of response.data.decodedDnsPacket.answers){
+                answer2.ttl = outttl;
+            }
+            response.data.bodyBuffer = encode3(response.data.decodedDnsPacket);
+        }
+    }
+    return response;
 }
 async function downloadBuildBlocklist(blocklistUrl, latestTimestamp, tdNodecount, tdParts) {
     try {
@@ -6097,8 +6340,8 @@ async function downloadBuildBlocklist(blocklistUrl, latestTimestamp, tdNodecount
         resp.blocklistBasicConfig = blocklistBasicConfig;
         resp.blocklistFileTag = downloads[0];
         return resp;
-    } catch (e18) {
-        throw e18;
+    } catch (e23) {
+        throw e23;
     }
 }
 async function fileFetch(url, typ) {
@@ -6137,8 +6380,8 @@ async function makeTd(baseurl, n) {
         return fileFetch(baseurl + "/td.txt", "buffer");
     }
     const tdpromises = [];
-    for(let i35 = 0; i35 <= n; i35++){
-        const f = baseurl + "/td" + i35.toLocaleString("en-US", {
+    for(let i30 = 0; i30 <= n; i30++){
+        const f = baseurl + "/td" + i30.toLocaleString("en-US", {
             minimumIntegerDigits: 2,
             useGrouping: false
         }) + ".txt";
@@ -6163,405 +6406,126 @@ function concat(arraybuffers) {
     }
     return buf;
 }
-class DNSAggCache {
-    constructor(){
-        this.dnsParser = new DNSParserWrap();
-        this.dnsBlockOperation = new DNSBlockOperation();
-        this.blocklistFilter = new BlocklistFilter();
-        this.wCache = null;
-    }
-    async RethinkModule(param) {
-        let response = {
-        };
-        response.isException = false;
-        response.exceptionStack = "";
-        response.exceptionFrom = "";
-        response.data = null;
-        try {
-            if (!param.isDnsMsg) {
-                return response;
-            }
-            response.data = await this.aggCache(param);
-        } catch (e19) {
-            response.isException = true;
-            response.exceptionStack = e19.stack;
-            response.exceptionFrom = "DNSAggCache RethinkModule";
-            console.error("Error At : DNSAggCache -> RethinkModule");
-            console.error(e19.stack);
-        }
-        return response;
-    }
-    async aggCache(param) {
-        let response = {
-        };
-        response.reqDecodedDnsPacket = this.dnsParser.Decode(param.requestBodyBuffer);
-        response.aggCacheResponse = {
-        };
-        response.aggCacheResponse.type = "none";
-        if (param.isAggCacheReq && this.wCache === null) {
-            this.wCache = caches.default;
-        }
-        if (param.isAggCacheReq) {
-            const dn = (response.reqDecodedDnsPacket.questions.length > 0 ? response.reqDecodedDnsPacket.questions[0].name : "").trim().toLowerCase() + ":" + response.reqDecodedDnsPacket.questions[0].type;
-            let cacheResponse = await getCacheapi(this.wCache, param.request.url, dn);
-            console.debug("Cache Api Response");
-            console.debug(cacheResponse);
-            if (cacheResponse) {
-                response.aggCacheResponse = await parseCacheapiResponse(cacheResponse, this.dnsParser, this.dnsBlockOperation, this.blocklistFilter, param.userBlocklistInfo, response.reqDecodedDnsPacket);
-            }
-        }
-        return response;
-    }
+function encodeUint16arrToBinary(uint16Arr) {
+    return String.fromCharCode(...new Uint8Array(uint16Arr.buffer));
 }
-async function parseCacheapiResponse(cacheResponse, dnsParser, dnsBlockOperation, blocklistFilter, userBlocklistInfo, reqDecodedDnsPacket) {
-    let response = {
-    };
-    response.type = "none";
-    response.data = {
-    };
-    let metaData = JSON.parse(cacheResponse.headers.get("x-rethink-metadata"));
-    console.debug("Response Found at CacheApi");
-    console.debug(JSON.stringify(metaData));
-    if ((reqDecodedDnsPacket.questions[0].type == "A" || reqDecodedDnsPacket.questions[0].type == "AAAA" || reqDecodedDnsPacket.questions[0].type == "CNAME" || reqDecodedDnsPacket.questions[0].type == "HTTPS" || reqDecodedDnsPacket.questions[0].type == "SVCB") && metaData.blocklistInfo && userBlocklistInfo.userBlocklistFlagUint !== "") {
-        metaData.blocklistInfo = new Map(Object.entries(metaData.blocklistInfo));
-        let blockResponse = dnsBlockOperation.checkDomainBlocking(userBlocklistInfo.userBlocklistFlagUint, userBlocklistInfo.userServiceListUint, userBlocklistInfo.flagVersion, metaData.blocklistInfo, blocklistFilter, reqDecodedDnsPacket.questions[0].name.trim().toLowerCase());
-        if (blockResponse.isBlocked) {
-            response.type = "blocked";
-            response.data = blockResponse;
+function encodeToBinary(s) {
+    const codeUnits = new Uint16Array(s.length);
+    for(let i31 = 0; i31 < codeUnits.length; i31++){
+        codeUnits[i31] = s.charCodeAt(i31);
+    }
+    return String.fromCharCode(...new Uint8Array(codeUnits.buffer));
+}
+const b64delim = ":";
+const b32delim = "+";
+function isB32(s) {
+    return s.indexOf(b32delim) > 0;
+}
+function version(s) {
+    if (s && s.length > 1) return s[0];
+    else return "0";
+}
+function toUint(flag) {
+    try {
+        const response = {
+        };
+        response.userBlocklistFlagUint = "";
+        response.flagVersion = "0";
+        flag = flag ? flag.trim() : "";
+        if (flag.length <= 0) {
             return response;
         }
-    }
-    if (metaData.bodyUsed) {
-        const now = Date.now();
-        if (now <= metaData.ttlEndTime) {
-            response.type = "response";
-            response.data.decodedDnsPacket = dnsParser.Decode(await cacheResponse.arrayBuffer());
-            const outttl = Math.max(Math.floor((metaData.ttlEndTime - now) / 1000), 1);
-            for (let answer1 of response.data.decodedDnsPacket.answers){
-                answer1.ttl = outttl;
-            }
-            response.data.bodyBuffer = dnsParser.Encode(response.data.decodedDnsPacket);
-        }
-    }
-    return response;
-}
-async function getCacheapi(wCache, reqUrl, key) {
-    let wCacheUrl = new URL(new URL(reqUrl).origin + "/" + key);
-    return await wCache.match(wCacheUrl);
-}
-const minDNSPacketSize = 12 + 5;
-const dns = new DNSParserWrap();
-const servfail = dns.Encode({
-    type: "response",
-    flags: 4098
-});
-function truncated(ans) {
-    if (ans.length < 12) return false;
-    const flags = ans.readUInt16BE(2);
-    const tc = flags >> 9 & 1;
-    return tc === 1;
-}
-function validResponseSize(r) {
-    return r && r.byteLength >= minDNSPacketSize && r.byteLength <= 4096;
-}
-function hasAnswers(packet) {
-    return packet && packet.answers && packet.answers.length > 0;
-}
-function rcodeNoError(packet) {
-    return packet && packet.rcode === "NOERROR";
-}
-function dnsqurl(dnsq) {
-    return btoa(String.fromCharCode(...new Uint8Array(dnsq))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
-}
-function optAnswer(a) {
-    return a && a.type && a.type.toUpperCase() === "OPT";
-}
-const mod = function() {
-    return {
-        dnsHeaderSize: 2,
-        dnsPacketHeaderSize: 12,
-        minDNSPacketSize: minDNSPacketSize,
-        maxDNSPacketSize: 4096,
-        servfail: servfail,
-        truncated: truncated,
-        validResponseSize: validResponseSize,
-        hasAnswers: hasAnswers,
-        rcodeNoError: rcodeNoError,
-        dnsqurl: dnsqurl,
-        optAnswer: optAnswer
-    };
-}();
-const quad1 = "1.1.1.2";
-const ttlGraceSec = 30;
-const dnsCacheSize = 10000;
-class DNSResolver {
-    constructor(){
-        this.dnsParser = new DNSParserWrap();
-        this.dnsResCache = null;
-        this.httpCache = null;
-        this.http2 = null;
-        this.transport = null;
-    }
-    async lazyInit() {
-        if (!this.dnsResCache) {
-            this.dnsResCache = new LocalCache("dns-response-cache", dnsCacheSize);
-        }
-        if (isWorkers() && !this.httpCache) {
-            this.httpCache = caches.default;
-        }
-        if (isNode() && !this.http2) {
-            this.http2 = await import("http2");
-        }
-        if (isNode() && !this.transport) {
-            this.transport = new (await import("../helpers/node/dns-transport.js")).Transport(quad1, 53);
-        }
-    }
-    async RethinkModule(param) {
-        await this.lazyInit();
-        let response = emptyResponse();
-        try {
-            response.data = await this.resolveRequest(param);
-        } catch (e20) {
-            response = errResponse("dnsResolver", e20);
-            log.e("Err DNSResolver -> RethinkModule", e20);
-        }
-        return response;
-    }
-    async resolveRequest(param) {
-        let cres = await this.resolveFromCache(param);
-        if (!cres) {
-            cres = await this.upstreamQuery(param);
-            safeBox(()=>{
-                this.updateCachesIfNeeded(param, cres);
-            });
-        }
-        if (!cres) {
-            throw new Error("No answer from cache or upstream", cres);
-        }
-        return {
-            responseBodyBuffer: cres.dnsPacket,
-            responseDecodedDnsPacket: cres.decodedDnsPacket
-        };
-    }
-    async resolveFromCache(param) {
-        const key = this.cacheKey(param.requestDecodedDnsPacket);
-        const qid = param.requestDecodedDnsPacket.id;
-        if (!key) return null;
-        let cacheRes = this.resolveFromLocalCache(qid, key);
-        if (!cacheRes) {
-            cacheRes = await this.resolveFromHttpCache(qid, key);
-            this.updateLocalCacheIfNeeded(key, cacheRes);
-        }
-        return cacheRes;
-    }
-    resolveFromLocalCache(queryId, key) {
-        const cacheRes = this.dnsResCache.Get(key);
-        if (!cacheRes) return false;
-        return this.makeCacheResponse(queryId, cacheRes.dnsPacket, cacheRes.ttlEndTime);
-    }
-    async resolveFromHttpCache(queryId, key) {
-        if (!this.httpCache) return false;
-        const hKey = this.httpCacheKey(param.request.url, key);
-        const resp = await this.httpCache.match(hKey);
-        if (!resp) return false;
-        const metadata = JSON.parse(resp.headers.get("x-rethink-metadata"));
-        const dnsPacket = await resp.arrayBuffer();
-        return this.makeCacheResponse(queryId, dnsPacket, metadata.ttlEndTime);
-    }
-    makeCacheResponse(queryId, dnsPacket, expiry = null) {
-        const decodedDnsPacket = safeBox(()=>{
-            return this.dnsParser.Decode(dnsPacket);
-        });
-        if (!decodedDnsPacket) {
-            log.d("mkcache decode failed", expiry);
-            return false;
-        }
-        if (expiry === null) {
-            expiry = this.determineCacheExpiry(decodedDnsPacket);
-        }
-        if (expiry < Date.now()) {
-            log.d("mkcache stale", expiry);
-            return false;
-        }
-        this.updateTtl(decodedDnsPacket, expiry);
-        this.updateQueryId(decodedDnsPacket, queryId);
-        const updatedDnsPacket = safeBox(()=>{
-            return this.dnsParser.Encode(decodedDnsPacket);
-        });
-        if (!updatedDnsPacket) {
-            log.w("mkcache encode failed", decodedDnsPacket, expiry);
-            return false;
-        }
-        const cacheRes = {
-            dnsPacket: updatedDnsPacket,
-            decodedDnsPacket: decodedDnsPacket,
-            ttlEndTime: expiry
-        };
-        return cacheRes;
-    }
-    async updateCachesIfNeeded(param, cacheRes) {
-        if (!cacheRes) return;
-        const k = this.cacheKey(param.requestDecodedDnsPacket);
-        if (!k) return;
-        this.updateLocalCacheIfNeeded(k, cacheRes);
-        this.updateHttpCacheIfNeeded(param, k, cacheRes);
-    }
-    updateLocalCacheIfNeeded(k, v) {
-        if (!k || !v) return;
-        const nv = {
-            dnsPacket: v.dnsPacket,
-            ttlEndTime: v.ttlEndTime
-        };
-        this.dnsResCache.Put(k, nv);
-    }
-    updateHttpCacheIfNeeded(param, k, cacheRes) {
-        if (!this.httpCache) return;
-        if (!k || !cacheRes) return;
-        const cacheUrl = this.httpCacheKey(param.request.url, k);
-        const value = new Response(cacheRes.dnsPacket, {
-            headers: {
-                "Content-Length": cacheRes.dnsPacket.byteLength,
-                "x-rethink-metadata": JSON.stringify(this.httpCacheMetadata(cacheRes, param.blocklistFilter))
-            },
-            cf: {
-                cacheTtl: 604800
-            }
-        });
-        dnsHeaders(value);
-        param.event.waitUntil(this.httpCache.put(cacheUrl, value));
-    }
-    async upstreamQuery(param) {
-        const upRes = await this.resolveDnsUpstream(param.request, param.dnsResolverUrl, param.requestBodyBuffer);
-        if (!upRes) throw new Error("no upstream result");
-        if (!upRes.ok) {
-            log.d("!OK", upRes.status, upRes.statusText, await upRes.text());
-            throw new Error(upRes.status + " http err: " + upRes.statusText);
-        }
-        const dnsPacket = await upRes.arrayBuffer();
-        if (!validResponseSize(dnsPacket)) {
-            throw new Error("inadequate response from upstream");
-        }
-        const queryId = param.requestDecodedDnsPacket.id;
-        return this.makeCacheResponse(queryId, dnsPacket);
-    }
-    determineCacheExpiry(decodedDnsPacket) {
-        if (!rcodeNoError(decodedDnsPacket)) return 0;
-        if (!hasAnswers(decodedDnsPacket)) return 0;
-        let minttl = 1 << 30;
-        for (let a of decodedDnsPacket.answers){
-            minttl = Math.min(a.ttl || minttl, minttl);
-        }
-        if (minttl === 1 << 30) return 0;
-        minttl = Math.max(minttl + ttlGraceSec, ttlGraceSec);
-        const expiry = Date.now() + minttl * 1000;
-        return expiry;
-    }
-    cacheKey(packet) {
-        if (packet.questions.length != 1) return null;
-        const name = packet.questions[0].name.trim().toLowerCase();
-        const type = packet.questions[0].type;
-        return name + ":" + type;
-    }
-    httpCacheKey(u, p) {
-        return new URL(new URL(u).origin + "/" + p);
-    }
-    updateQueryId(decodedDnsPacket, queryId) {
-        decodedDnsPacket.id = queryId;
-    }
-    updateTtl(decodedDnsPacket, end) {
-        const now = Date.now();
-        const outttl = Math.max(Math.floor((end - now) / 1000), 30);
-        for (let a of decodedDnsPacket.answers){
-            if (!optAnswer(a)) a.ttl = outttl;
-        }
-    }
-}
-DNSResolver.prototype.resolveDnsUpstream = async function(request, resolverUrl, requestBodyBuffer) {
-    try {
-        if (this.transport) {
-            const q = bufferOf(requestBodyBuffer);
-            let ans = await this.transport.udpquery(q);
-            if (ans && truncated(ans)) {
-                log.w("ans truncated, retrying over tcp");
-                ans = await this.transport.tcpquery(q);
-            }
-            return ans ? new Response(arrayBufferOf(ans)) : new Response(null, {
-                status: 503
-            });
-        }
-        let u = new URL(request.url);
-        let dnsResolverUrl = new URL(resolverUrl);
-        u.hostname = dnsResolverUrl.hostname;
-        u.pathname = dnsResolverUrl.pathname;
-        u.port = dnsResolverUrl.port;
-        u.protocol = dnsResolverUrl.protocol;
-        let newRequest = null;
-        if (request.method === "GET" || isWorkers() && request.method === "POST") {
-            u.search = "?dns=" + dnsqurl(requestBodyBuffer);
-            newRequest = new Request(u.href, {
-                method: "GET"
-            });
-        } else if (request.method === "POST") {
-            newRequest = new Request(u.href, {
-                method: "POST",
-                headers: {
-                    "Content-Length": requestBodyBuffer.byteLength
-                },
-                body: requestBodyBuffer
-            });
+        const isFlagB32 = isB32(flag);
+        let s = flag.split(isFlagB32 ? b32delim : b64delim);
+        let convertor = (x)=>""
+        ;
+        let f = "";
+        const v = version(s);
+        if (v == "0") {
+            convertor = Base64ToUint;
+            f = s[0];
+        } else if (v == "1") {
+            convertor = isFlagB32 ? Base32ToUint_v1 : Base64ToUint_v1;
+            f = s[1];
         } else {
-            throw new Error("get/post requests only");
+            throw new Error("unknown blocklist stamp version in " + s);
         }
-        dnsHeaders(newRequest);
-        return this.http2 ? this.doh2(newRequest) : fetch(newRequest);
-    } catch (e21) {
-        throw e21;
+        response.flagVersion = v;
+        response.userBlocklistFlagUint = convertor(f) || "";
+        return response;
+    } catch (e24) {
+        throw e24;
     }
-};
-DNSResolver.prototype.doh2 = async function(request) {
-    console.debug("upstream using h2");
-    const http2 = this.http2;
-    const u = new URL(request.url);
-    const reqB = bufferOf(await request.arrayBuffer());
-    const headers1 = {
+}
+function Base64ToUint(b64Flag) {
+    const buff = Buffer.from(decodeURIComponent(b64Flag), "base64");
+    const str = buff.toString("utf-8");
+    const uint = [];
+    for(let i32 = 0; i32 < str.length; i32++){
+        uint[i32] = str.charCodeAt(i32);
+    }
+    return uint;
+}
+function Base64ToUint_v1(b64Flag) {
+    let str = decodeURI(b64Flag);
+    str = decodeFromBinary(atob(str.replace(/_/g, "/").replace(/-/g, "+")));
+    const uint = [];
+    for(let i33 = 0; i33 < str.length; i33++){
+        uint[i33] = str.charCodeAt(i33);
+    }
+    return uint;
+}
+function Base32ToUint_v1(flag) {
+    let str = decodeURI(flag);
+    str = decodeFromBinaryArray(rbase32(str));
+    const uint = [];
+    for(let i34 = 0; i34 < str.length; i34++){
+        uint[i34] = str.charCodeAt(i34);
+    }
+    return uint;
+}
+function decodeFromBinary(b, u8) {
+    if (u8) return String.fromCharCode(...new Uint16Array(b.buffer));
+    const bytes = new Uint8Array(b.length);
+    for(let i35 = 0; i35 < bytes.length; i35++){
+        bytes[i35] = b.charCodeAt(i35);
+    }
+    return String.fromCharCode(...new Uint16Array(bytes.buffer));
+}
+function decodeFromBinaryArray(b) {
+    return decodeFromBinary(b, true);
+}
+function createResponse(buf, metaData) {
+    return new Response(buf, {
+        headers: {
+            "Content-Length": buf.length,
+            "x-rethink-metadata": JSON.stringify(metaData)
+        },
+        cf: {
+            cacheTtl: 604800
+        }
+    });
+}
+async function validateCacheApiResponse(response) {
+    console.debug("came at validateCacheApiResponse");
+    if (!response) return false;
+    console.debug("Response found in Cache api");
+    const metaData = JSON.parse(response.headers.get("x-rethink-metadata"));
+    console.debug(metaData);
+    if (metaData.bodyUsed && Date.now() >= metaData.ttlEndTime) {
+        return false;
+    }
+    let data = {
     };
-    request.headers.forEach((v, k)=>{
-        headers1[k] = v;
-    });
-    return new Promise((resolve, reject)=>{
-        const authority = u.origin;
-        const c = http2.connect(authority);
-        c.on("error", (err)=>{
-            reject(err.message);
-        });
-        const req = c.request({
-            [http2.constants.HTTP2_HEADER_METHOD]: request.method,
-            [http2.constants.HTTP2_HEADER_PATH]: `${u.pathname}`,
-            ...headers1
-        });
-        req.on("response", (headers)=>{
-            const resBuffers = [];
-            const resH = {
-            };
-            for(const k in headers){
-                if (k.startsWith(":")) resH[k.slice(1)] = headers[k];
-                else resH[k] = headers[k];
-            }
-            req.on("data", (chunk)=>{
-                resBuffers.push(chunk);
-            });
-            req.on("end", ()=>{
-                const resB = Buffer.concat(resBuffers);
-                c.close();
-                resolve(new Response(resB, resH));
-            });
-            req.on("error", (err)=>{
-                reject(err.message);
-            });
-        });
-        req.end(reqB);
-    });
-};
+    data.decodedDnsPacket = metaData.bodyUsed ? decode3(await response.arrayBuffer()) : {
+    };
+    data.metaData = metaData;
+    console.debug(JSON.stringify(data));
+    return data;
+}
+function makeCacheApiKey(key, url) {
+    return new URL(new URL(url).origin + "/" + env.latestTimestamp + "/" + key);
+}
 class CurrentRequest {
     constructor(){
         this.blockedB64Flag = "";
@@ -6574,19 +6538,18 @@ class CurrentRequest {
         this.isDnsBlock = false;
         this.isInvalidFlagBlock = false;
         this.stopProcessing = false;
-        this.dnsParser = new DNSParserWrap();
     }
     dnsExceptionResponse() {
         const singleLog = {
         };
         singleLog.exceptionFrom = this.exceptionFrom;
         singleLog.exceptionStack = this.exceptionStack;
-        this.httpResponse = new Response(mod.servfail);
+        this.httpResponse = new Response(servfail);
         this.setHeaders();
         this.httpResponse.headers.set("x-err", JSON.stringify(singleLog));
     }
     customResponse(data) {
-        this.httpResponse = new Response(mod);
+        this.httpResponse = new Response(servfail);
         this.setHeaders();
         this.httpResponse.headers.set("x-err", JSON.stringify(data));
     }
@@ -6622,12 +6585,12 @@ class CurrentRequest {
                 };
             }
             this.decodedDnsPacket.authorities = [];
-            this.httpResponse = new Response(this.dnsParser.Encode(this.decodedDnsPacket));
+            this.httpResponse = new Response(encode3(this.decodedDnsPacket));
             this.setHeaders();
-        } catch (e22) {
+        } catch (e25) {
             log.e(JSON.stringify(this.decodedDnsPacket));
             this.isException = true;
-            this.exceptionStack = e22.stack;
+            this.exceptionStack = e25.stack;
             this.exceptionFrom = "CurrentRequest dnsBlockResponse";
         }
     }
@@ -6707,9 +6670,9 @@ class CommandControl {
                     statusText: "Bad Request"
                 });
             }
-        } catch (e23) {
+        } catch (e26) {
             response.isException = true;
-            response.exceptionStack = e23.stack;
+            response.exceptionStack = e26.stack;
             response.exceptionFrom = "CommandControl commandOperation";
             response.data.httpResponse = new Response(JSON.stringify(response.exceptionStack));
             response.data.httpResponse.headers.set("Content-Type", "application/json");
@@ -6806,7 +6769,7 @@ function b64ToList(queryString, blocklistFilter) {
 }
 class UserOperation {
     constructor(){
-        this.userConfigCache = false;
+        this.userConfigCache = new UserCache(1000);
         this.blocklistFilter = new BlocklistFilter();
     }
     async RethinkModule(param) {
@@ -6827,14 +6790,11 @@ class UserOperation {
             if (!param.isDnsMsg) {
                 return response;
             }
-            if (!this.userConfigCache) {
-                this.userConfigCache = new LocalCache("User-Config-Cache", 1000);
-            }
             let userBlocklistInfo = {
             };
             userBlocklistInfo.from = "Cache";
             let blocklistFlag = getBlocklistFlag(param.request.url);
-            let currentUser = this.userConfigCache.Get(blocklistFlag);
+            let currentUser = this.userConfigCache.get(blocklistFlag);
             if (!currentUser) {
                 currentUser = {
                 };
@@ -6850,19 +6810,19 @@ class UserOperation {
                     blocklistFlag = "";
                 }
                 userBlocklistInfo.from = "Generated";
-                this.userConfigCache.Put(blocklistFlag, currentUser);
+                this.userConfigCache.put(blocklistFlag, currentUser);
             }
             userBlocklistInfo.userBlocklistFlagUint = currentUser.userBlocklistFlagUint;
             userBlocklistInfo.flagVersion = currentUser.flagVersion;
             userBlocklistInfo.userServiceListUint = currentUser.userServiceListUint;
             response.data.userBlocklistInfo = userBlocklistInfo;
             response.data.dnsResolverUrl = param.dnsResolverUrl;
-        } catch (e24) {
+        } catch (e27) {
             response.isException = true;
-            response.exceptionStack = e24.stack;
+            response.exceptionStack = e27.stack;
             response.exceptionFrom = "UserOperation loadUser";
             console.error("Error At : UserOperation -> loadUser");
-            console.error(e24.stack);
+            console.error(e27.stack);
         }
         return response;
     }
@@ -6887,12 +6847,14 @@ const dnsBlock = new DNSBlock();
 const dnsResolver = new DNSResolver();
 const dnsResponseBlock = new DNSResponseBlock();
 const dnsAggCache = new DNSAggCache();
+const dnsCache = new DnsCache(10000);
 class RethinkPlugin {
     constructor(event){
         this.parameter = new Map(envManager.getMap());
         this.registerParameter("request", event.request);
         this.registerParameter("event", event);
         this.registerParameter("isDnsMsg", event.request.headers.get("Accept") == "application/dns-message" || event.request.headers.get("Content-Type") == "application/dns-message");
+        this.registerParameter("dnsCache", dnsCache);
         this.plugin = [];
         this.registerPlugin("userOperation", userOperation, [
             "dnsResolverUrl",
@@ -6904,7 +6866,8 @@ class RethinkPlugin {
             "request",
             "requestBodyBuffer",
             "isAggCacheReq",
-            "isDnsMsg", 
+            "isDnsMsg",
+            "dnsCache"
         ], dnsAggCacheCallBack, false);
         this.registerPlugin("blocklistFilter", blocklistWrapper, [
             "blocklistUrl",
@@ -6925,16 +6888,17 @@ class RethinkPlugin {
             "userBlocklistInfo",
             "isAggCacheReq",
             "event",
-            "request", 
+            "request",
+            "dnsCache"
         ], dnsBlockCallBack, false);
         this.registerPlugin("dnsResolver", dnsResolver, [
             "requestBodyBuffer",
             "request",
             "dnsResolverUrl",
-            "cloudPlatform",
             "requestDecodedDnsPacket",
             "event",
-            "blocklistFilter", 
+            "blocklistFilter",
+            "dnsCache"
         ], dnsResolverCallBack, false);
         this.registerPlugin("DNSResponseBlock", dnsResponseBlock, [
             "userBlocklistInfo",
@@ -7121,10 +7085,10 @@ class EnvManager {
             this.env.set("tdParts", parseInt(TD_PARTS));
             this.env.set("isAggCacheReq", IS_AGGRESSIVE_CACHE_REQ == "true" ? true : false);
             this.isLoaded = true;
-        } catch (e25) {
-            if (e25 instanceof ReferenceError) {
+        } catch (e28) {
+            if (e28 instanceof ReferenceError) {
                 typeof Deno !== "undefined" ? this.loadEnvDeno() : this.loadEnvNode();
-            } else throw e25;
+            } else throw e28;
         }
         globalThis.env = Object.fromEntries(this.env);
     }
@@ -7273,7 +7237,7 @@ function handleRequest(event) {
     if (!envManager.isLoaded) envManager.loadEnv();
     if (!globalThis.log) globalThis.log = new Log(env.logLevel, env.runTimeEnv == "production");
     const processingTimeout = envManager.get("workerTimeout");
-    const respectTimeout = envManager.get("runTime") == "worker" && processingTimeout > 0;
+    const respectTimeout = isWorkers() && processingTimeout > 0;
     if (!respectTimeout) return proxyRequest(event);
     return Promise.race([
         new Promise((resolve, _)=>{
