@@ -7100,7 +7100,7 @@ function base64ToArrayBuffer(base64) {
     }
     return bytes.buffer;
 }
-const _ENV_VARIABLES = {
+const _ENV_MAPPINGS = {
     runTime: "RUNTIME",
     runTimeEnv: {
         worker: "WORKER_ENV",
@@ -7137,7 +7137,7 @@ function _loadEnv(runtime) {
     console.info("Loading env. from runtime: ", runtime);
     const env = {
     };
-    for (const [key, value] of Object.entries(_ENV_VARIABLES)){
+    for (const [key, value] of Object.entries(_ENV_MAPPINGS)){
         let name = null;
         let type = "string";
         if (typeof value === "string") {
@@ -7172,6 +7172,7 @@ class EnvManager {
             this.envMap.set(key, value);
         }
         runtime == "worker" && this.envMap.set("workerTimeout", Number(WORKER_TIMEOUT) + Number(CF_BLOCKLIST_DOWNLOAD_TIMEOUT));
+        console.debug("Loaded env: ", runtime == "worker" && JSON.stringify(Object.fromEntries(this.envMap)) || Object.fromEntries(this.envMap));
         globalThis.env = Object.fromEntries(this.envMap);
         this.isLoaded = true;
     }
@@ -7289,7 +7290,7 @@ if (typeof addEventListener !== "undefined") {
 }
 function handleRequest(event) {
     if (!envManager.isLoaded) envManager.loadEnv();
-    if (!globalThis.log) globalThis.log = new Log(env.logLevel, env.runTimeEnv == "production");
+    if (!globalThis.log && !console.level) globalThis.log = new Log(env.logLevel, env.runTimeEnv == "production");
     const processingTimeout = envManager.get("workerTimeout");
     const respectTimeout = envManager.get("runTime") == "worker" && processingTimeout > 0;
     if (!respectTimeout) return proxyRequest(event);
