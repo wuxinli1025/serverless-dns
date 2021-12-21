@@ -241,22 +241,25 @@ class LfuCache {
         }
     }
 }
-class CacheApi {
-    constructor(){
-        this.wCache = caches.default;
-    }
-    async get(url) {
-        return await this.wCache.match(url);
-    }
-    put(url, response) {
-        this.wCache.put(url, response);
-    }
-}
 function isWorkers() {
     return env && env.runTime === "worker";
 }
 function isNode() {
     return env && env.runTime === "node";
+}
+class CacheApi {
+    async get(url) {
+        if (isWorkers()) {
+            return await caches.default.match(url);
+        }
+        return false;
+    }
+    put(url, response) {
+        if (isWorkers()) {
+            return caches.default.put(url, response);
+        }
+        return false;
+    }
 }
 class UserCache {
     constructor(size){
