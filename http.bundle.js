@@ -105,8 +105,18 @@ try {
         export: true
     });
     Deno.env.set("RUNTIME", "deno");
-} catch (e25) {
-    console.warn(".env file may not be loaded => ", e25.name, ":", e25.message);
+} catch (e) {
+    console.warn(".env file may not be loaded => ", e.name, ":", e.message);
+}
+function isWorkers() {
+    return env && env.runTime === "worker";
+}
+function isNode() {
+    return env && env.runTime === "node";
+}
+function workersTimeout(defaultValue = 0) {
+    if (envManager) return envManager.get("workerTimeout") || defaultValue;
+    return defaultValue;
 }
 const hexTable = new TextEncoder().encode("0123456789abcdef");
 function errInvalidByte(__byte) {
@@ -4755,12 +4765,6 @@ class DNSParserWrap {
         }
     }
 }
-function isWorkers() {
-    return env && env.runTime === "worker";
-}
-function isNode() {
-    return env && env.runTime === "node";
-}
 const minlives = 1;
 const maxlives = 2 ** 14;
 const mincap = 2 ** 5;
@@ -4932,15 +4936,8 @@ function corsHeaders() {
         "Access-Control-Allow-Headers": "*"
     };
 }
-function corsHeadersIfNeeded(req) {
-    return fromBrowser(req) ? corsHeaders() : {
-    };
-}
 function browserHeaders() {
     return Object.assign(jsonHeaders(), corsHeaders());
-}
-function dohHeaders(req) {
-    return Object.assign(dnsHeaders(), corsHeadersIfNeeded(req));
 }
 function contentLengthHeader(b) {
     const len = !b || !b.byteLength ? "0" : b.byteLength.toString();
@@ -4952,12 +4949,17 @@ function concatHeaders() {
     return Object.assign(...arguments);
 }
 function arrayBufferOf(buf) {
+    if (!buf) return null;
     const offset = buf.byteOffset;
     const len = buf.byteLength;
     return buf.buffer.slice(offset, offset + len);
 }
 function bufferOf(arrayBuf) {
+    if (!arrayBuf) return null;
     return Buffer.from(new Uint8Array(arrayBuf));
+}
+function timeout(ms, callback) {
+    return setTimeout(callback, ms);
 }
 function uid() {
     return (Math.random() + 1).toString(36).slice(1);
@@ -6269,10 +6271,19 @@ async function getCacheapi(wCache, reqUrl, key) {
 }
 const minDNSPacketSize = 12 + 5;
 const dns = new DNSParserWrap();
-const servfail = dns.Encode({
-    type: "response",
-    flags: 4098
-});
+function servfail(qid, qs) {
+    if (!qid || !qs) return null;
+    return dns.Encode({
+        id: qid,
+        type: "response",
+        flags: 4098,
+        questions: qs
+    });
+}
+function requestTimeout() {
+    const t = workersTimeout();
+    return t > 5000 ? Math.min(t, 30000) : 5000;
+}
 function truncated(ans) {
     if (ans.length < 12) return false;
     const flags = ans.readUInt16BE(2);
@@ -6583,17 +6594,20 @@ class CurrentRequest {
         this.dnsParser = new DNSParserWrap();
     }
     dnsExceptionResponse() {
-        const singleLog = {
+        const qid = this.decodedDnsPacket.id;
+        const questions = this.decodedDnsPacket.questions;
+        const ex = {
+            exceptionFrom: this.exceptionFrom,
+            exceptionStack: this.exceptionStack
         };
-        singleLog.exceptionFrom = this.exceptionFrom;
-        singleLog.exceptionStack = this.exceptionStack;
-        this.httpResponse = new Response(servfail, {
-            headers: concatHeaders(this.headers(), this.additionalHeader(JSON.stringify(singleLog)))
+        this.httpResponse = new Response(servfail(qid, questions), {
+            headers: concatHeaders(this.headers(), this.additionalHeader(JSON.stringify(ex))),
+            status: 200
         });
     }
-    customResponse(data) {
+    customResponse(x) {
         this.httpResponse = new Response(null, {
-            headers: concatHeaders(this.headers(), this.additionalHeader(JSON.stringify(data)))
+            headers: concatHeaders(this.headers(), this.additionalHeader(JSON.stringify(x)))
         });
     }
     dnsResponse(arrayBuffer) {
@@ -7297,55 +7311,60 @@ if (typeof addEventListener !== "undefined") {
         event.respondWith(handleRequest(event));
     });
 }
+function initEnvIfNeeded() {
+    if (!envManager.isLoaded) {
+        envManager.loadEnv();
+    }
+    if (!globalThis.log && !console.level) {
+        globalThis.log = new Log(env.logLevel, env.runTimeEnv === "production");
+    }
+}
 function handleRequest(event) {
-    if (!envManager.isLoaded) envManager.loadEnv();
-    if (!globalThis.log && !console.level) globalThis.log = new Log(env.logLevel, env.runTimeEnv == "production");
-    const processingTimeout = envManager.get("workerTimeout");
-    const respectTimeout = envManager.get("runTime") == "worker" && processingTimeout > 0;
-    if (!respectTimeout) return proxyRequest(event);
+    initEnvIfNeeded();
     return Promise.race([
-        new Promise((resolve, _)=>{
-            resolve(proxyRequest(event));
+        new Promise((accept, _)=>{
+            accept(proxyRequest(event));
         }),
-        new Promise((resolve, _)=>{
-            setTimeout(()=>{
-                resolve(servfail1(event));
-            }, processingTimeout);
+        new Promise((accept, _)=>{
+            timeout(requestTimeout(), ()=>accept(servfail1(event.request))
+            );
         }), 
     ]);
 }
 async function proxyRequest(event) {
     try {
-        if (event.request.method === "OPTIONS") {
-            const res = new Response(null, {
-                status: 204,
-                headers: corsHeaders()
-            });
-            return res;
-        }
+        if (optionsRequest(event.request)) return respond204();
         const currentRequest = new CurrentRequest();
         const plugin = new RethinkPlugin(event);
         await plugin.executePlugin(currentRequest);
         return currentRequest.httpResponse;
     } catch (err) {
         log.e(err.stack);
-        return errorOrServfail(event, err);
+        return errorOrServfail(req, err);
     }
 }
-function errorOrServfail(event, err) {
-    if (fromBrowser(event)) {
-        const res = new Response(JSON.stringify(e.stack), {
-            headers: browserHeaders()
-        });
-        return res;
-    }
-    return servfail1(event);
+function optionsRequest(req) {
+    return req.method === "OPTIONS";
 }
-function servfail1(event) {
-    const res = new Response(servfail, {
-        headers: dohHeaders(event.request)
+function respond204() {
+    return new Response(null, {
+        status: 204,
+        headers: corsHeaders()
+    });
+}
+function errorOrServfail(req, err) {
+    if (!fromBrowser(req)) return servfail1();
+    const res = new Response(JSON.stringify(err.stack), {
+        status: 503,
+        headers: browserHeaders()
     });
     return res;
+}
+function servfail1() {
+    return new Response(servfail(), {
+        status: 503,
+        headers: dnsHeaders()
+    });
 }
 const { TERMINATE_TLS , TLS_CRT_PATH , TLS_KEY_PATH  } = Deno.env.toObject();
 const l = TERMINATE_TLS == "true" ? Deno.listenTls({
@@ -7365,14 +7384,14 @@ async function handleHttp(conn1) {
     while(true){
         try {
             requestEvent = await httpConn.nextRequest();
-        } catch (e) {
-            console.warn("error reading http request", e);
+        } catch (e25) {
+            console.warn("error reading http request", e25);
         }
         if (requestEvent) {
             try {
                 await requestEvent.respondWith(handleRequest(requestEvent));
-            } catch (e) {
-                console.warn("error handling http request", e);
+            } catch (e26) {
+                console.warn("error handling http request", e26);
             }
         }
     }
