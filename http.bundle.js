@@ -4915,24 +4915,41 @@ function fromBrowser(req) {
     const ua = req.headers.get("User-Agent");
     return ua && ua.startsWith("Mozilla/5.0");
 }
-function jsonHeaders(res) {
-    res.headers.set("Content-Type", "application/json");
+function jsonHeaders() {
+    return {
+        "Content-Type": "application/json"
+    };
 }
-function dnsHeaders(res) {
-    res.headers.set("Accept", "application/dns-message");
-    res.headers.set("Content-Type", "application/dns-message");
+function dnsHeaders() {
+    return {
+        "Accept": "application/dns-message",
+        "Content-Type": "application/dns-message"
+    };
 }
-function corsHeaders(res) {
-    res.headers.set("Access-Control-Allow-Origin", "*");
-    res.headers.set("Access-Control-Allow-Headers", "*");
+function corsHeaders() {
+    return {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "*"
+    };
 }
-function browserHeaders(res) {
-    jsonHeaders(res);
-    corsHeaders(res);
+function corsHeadersIfNeeded(req) {
+    return fromBrowser(req) ? corsHeaders() : {
+    };
 }
-function dohHeaders(req, res) {
-    dnsHeaders(res);
-    if (fromBrowser(req)) corsHeaders(res);
+function browserHeaders() {
+    return Object.assign(jsonHeaders(), corsHeaders());
+}
+function dohHeaders(req) {
+    return Object.assign(dnsHeaders(), corsHeadersIfNeeded(req));
+}
+function contentLengthHeader(b) {
+    const len = !b || !b.byteLength ? "0" : b.byteLength.toString();
+    return {
+        "Content-Length": len
+    };
+}
+function concatHeaders() {
+    return Object.assign(...arguments);
 }
 function arrayBufferOf(buf) {
     const offset = buf.byteOffset;
@@ -4951,6 +4968,9 @@ function safeBox(fn, defaultResponse = null) {
     } catch (ignore) {
     }
     return defaultResponse;
+}
+function isDnsMsg(req) {
+    return req.headers.get("Accept") === "application/dns-message" || req.headers.get("Content-Type") === "application/dns-message";
 }
 function emptyResponse() {
     return {
@@ -6186,8 +6206,7 @@ class DNSAggCache {
             response.isException = true;
             response.exceptionStack = e19.stack;
             response.exceptionFrom = "DNSAggCache RethinkModule";
-            console.error("Error At : DNSAggCache -> RethinkModule");
-            console.error(e19.stack);
+            console.error("Error At : DNSAggCache -> RethinkModule", e19);
         }
         return response;
     }
@@ -6204,8 +6223,7 @@ class DNSAggCache {
         if (param.isAggCacheReq) {
             const dn = (response.reqDecodedDnsPacket.questions.length > 0 ? response.reqDecodedDnsPacket.questions[0].name : "").trim().toLowerCase() + ":" + response.reqDecodedDnsPacket.questions[0].type;
             let cacheResponse = await getCacheapi(this.wCache, param.request.url, dn);
-            console.debug("Cache Api Response");
-            console.debug(cacheResponse);
+            log.d("Cache Api Response", cacheResponse);
             if (cacheResponse) {
                 response.aggCacheResponse = await parseCacheapiResponse(cacheResponse, this.dnsParser, this.dnsBlockOperation, this.blocklistFilter, param.userBlocklistInfo, response.reqDecodedDnsPacket);
             }
@@ -6262,7 +6280,10 @@ function truncated(ans) {
     return tc === 1;
 }
 function validResponseSize(r) {
-    return r && r.byteLength >= minDNSPacketSize && r.byteLength <= 4096;
+    return r && validateSize(r.byteLength);
+}
+function validateSize(sz) {
+    return sz >= minDNSPacketSize && sz <= 4096;
 }
 function hasAnswers(packet) {
     return packet && packet.answers && packet.answers.length > 0;
@@ -6276,21 +6297,6 @@ function dnsqurl(dnsq) {
 function optAnswer(a) {
     return a && a.type && a.type.toUpperCase() === "OPT";
 }
-const mod = function() {
-    return {
-        dnsHeaderSize: 2,
-        dnsPacketHeaderSize: 12,
-        minDNSPacketSize: minDNSPacketSize,
-        maxDNSPacketSize: 4096,
-        servfail: servfail,
-        truncated: truncated,
-        validResponseSize: validResponseSize,
-        hasAnswers: hasAnswers,
-        rcodeNoError: rcodeNoError,
-        dnsqurl: dnsqurl,
-        optAnswer: optAnswer
-    };
-}();
 const quad1 = "1.1.1.2";
 const ttlGraceSec = 30;
 const dnsCacheSize = 10000;
@@ -6346,10 +6352,11 @@ class DNSResolver {
     async resolveFromCache(param) {
         const key = this.cacheKey(param.requestDecodedDnsPacket);
         const qid = param.requestDecodedDnsPacket.id;
+        const url = param.request.url;
         if (!key) return null;
         let cacheRes = this.resolveFromLocalCache(qid, key);
         if (!cacheRes) {
-            cacheRes = await this.resolveFromHttpCache(qid, key);
+            cacheRes = await this.resolveFromHttpCache(qid, url, key);
             this.updateLocalCacheIfNeeded(key, cacheRes);
         }
         return cacheRes;
@@ -6359,9 +6366,9 @@ class DNSResolver {
         if (!cacheRes) return false;
         return this.makeCacheResponse(queryId, cacheRes.dnsPacket, cacheRes.ttlEndTime);
     }
-    async resolveFromHttpCache(queryId, key) {
+    async resolveFromHttpCache(queryId, url, key) {
         if (!this.httpCache) return false;
-        const hKey = this.httpCacheKey(param.request.url, key);
+        const hKey = this.httpCacheKey(url, key);
         const resp = await this.httpCache.match(hKey);
         if (!resp) return false;
         const metadata = JSON.parse(resp.headers.get("x-rethink-metadata"));
@@ -6419,16 +6426,18 @@ class DNSResolver {
         if (!k || !cacheRes) return;
         const cacheUrl = this.httpCacheKey(param.request.url, k);
         const value = new Response(cacheRes.dnsPacket, {
-            headers: {
-                "Content-Length": cacheRes.dnsPacket.byteLength,
-                "x-rethink-metadata": JSON.stringify(this.httpCacheMetadata(cacheRes, param.blocklistFilter))
-            },
+            headers: this.httpCacheHeaders(cacheRes, param.blocklistFilter)
+        });
+        param.event.waitUntil(this.httpCache.put(cacheUrl, value));
+    }
+    httpCacheHeaders(cres, blFilter) {
+        return concatHeaders({
+            "x-rethink-metadata": JSON.stringify(this.httpCacheMetadata(cres, blFilter))
+        }, contentLengthHeader(cres.dnsPacket), dnsHeaders(), {
             cf: {
                 cacheTtl: 604800
             }
         });
-        dnsHeaders(value);
-        param.event.waitUntil(this.httpCache.put(cacheUrl, value));
     }
     async upstreamQuery(param) {
         const upRes = await this.resolveDnsUpstream(param.request, param.dnsResolverUrl, param.requestBodyBuffer);
@@ -6504,15 +6513,12 @@ DNSResolver.prototype.resolveDnsUpstream = async function(request, resolverUrl, 
         } else if (request.method === "POST") {
             newRequest = new Request(u.href, {
                 method: "POST",
-                headers: {
-                    "Content-Length": requestBodyBuffer.byteLength
-                },
+                headers: concatHeaders(contentLengthHeader(requestBodyBuffer), dnsHeaders()),
                 body: requestBodyBuffer
             });
         } else {
             throw new Error("get/post requests only");
         }
-        dnsHeaders(newRequest);
         return this.http2 ? this.doh2(newRequest) : fetch(newRequest);
     } catch (e21) {
         throw e21;
@@ -6581,18 +6587,19 @@ class CurrentRequest {
         };
         singleLog.exceptionFrom = this.exceptionFrom;
         singleLog.exceptionStack = this.exceptionStack;
-        this.httpResponse = new Response(mod.servfail);
-        this.setHeaders();
-        this.httpResponse.headers.set("x-err", JSON.stringify(singleLog));
+        this.httpResponse = new Response(servfail, {
+            headers: concatHeaders(this.headers(), this.additionalHeader(JSON.stringify(singleLog)))
+        });
     }
     customResponse(data) {
-        this.httpResponse = new Response(mod);
-        this.setHeaders();
-        this.httpResponse.headers.set("x-err", JSON.stringify(data));
+        this.httpResponse = new Response(null, {
+            headers: concatHeaders(this.headers(), this.additionalHeader(JSON.stringify(data)))
+        });
     }
     dnsResponse(arrayBuffer) {
-        this.httpResponse = new Response(arrayBuffer);
-        this.setHeaders();
+        this.httpResponse = new Response(arrayBuffer, {
+            headers: this.headers()
+        });
     }
     dnsBlockResponse() {
         try {
@@ -6622,8 +6629,9 @@ class CurrentRequest {
                 };
             }
             this.decodedDnsPacket.authorities = [];
-            this.httpResponse = new Response(this.dnsParser.Encode(this.decodedDnsPacket));
-            this.setHeaders();
+            this.httpResponse = new Response(this.dnsParser.Encode(this.decodedDnsPacket), {
+                headers: this.headers()
+            });
         } catch (e22) {
             log.e(JSON.stringify(this.decodedDnsPacket));
             this.isException = true;
@@ -6631,16 +6639,20 @@ class CurrentRequest {
             this.exceptionFrom = "CurrentRequest dnsBlockResponse";
         }
     }
-    setHeaders() {
-        this.httpResponse.headers.set("Content-Type", "application/dns-message");
-        this.httpResponse.headers.append("Vary", "Origin");
-        this.httpResponse.headers.delete("expect-ct");
-        this.httpResponse.headers.delete("cf-ray");
-        if (this.isDnsBlock) {
-            this.httpResponse.headers.set("x-nile-flags", this.blockedB64Flag);
-        } else if (this.blockedB64Flag !== "") {
-            this.httpResponse.headers.set('x-nile-flag-notblocked', this.blockedB64Flag);
-        }
+    headers() {
+        const xNileFlags = this.isDnsBlock ? {
+            "x-nile-flags": this.blockedB64Flag
+        } : null;
+        const xNileFlagsAllowed = this.blockedB64Flag ? {
+            "x-nile-flags-allowed": this.blockedB64Flag
+        } : null;
+        return concatHeaders(dnsHeaders(), xNileFlags, xNileFlagsAllowed);
+    }
+    additionalHeader(json) {
+        if (!json) return null;
+        return {
+            "x-nile-add": json
+        };
     }
 }
 class CommandControl {
@@ -6663,7 +6675,7 @@ class CommandControl {
         }
         return response;
     }
-    commandOperation(url, blocklistFilter, isDnsMsg) {
+    commandOperation(url, blocklistFilter, isDnsMsg1) {
         let response = {
         };
         response.isException = false;
@@ -6697,7 +6709,7 @@ class CommandControl {
                     b64UserFlag = pathSplit[2];
                 }
                 response.data.httpResponse = configRedirect(b64UserFlag, reqUrl.origin, this.latestTimestamp);
-            } else if (!isDnsMsg) {
+            } else if (!isDnsMsg1) {
                 response.data.httpResponse = Response.redirect(weburl, 302);
             } else if (queryString.has("dns")) {
                 response.data.stopProcessing = false;
@@ -6711,8 +6723,7 @@ class CommandControl {
             response.isException = true;
             response.exceptionStack = e23.stack;
             response.exceptionFrom = "CommandControl commandOperation";
-            response.data.httpResponse = new Response(JSON.stringify(response.exceptionStack));
-            response.data.httpResponse.headers.set("Content-Type", "application/json");
+            response.data.httpResponse = jsonResponse(response.exceptionStack);
         }
         return response;
     }
@@ -6747,9 +6758,7 @@ function domainNameToList(queryString, blocklistFilter, latestTimestamp) {
     } else {
         returndata.list = false;
     }
-    let response = new Response(JSON.stringify(returndata));
-    response.headers.set("Content-Type", "application/json");
-    return response;
+    return jsonResponse(returndata);
 }
 function domainNameToUint(queryString, blocklistFilter) {
     let domainName = queryString.get("dn") || "";
@@ -6766,9 +6775,7 @@ function domainNameToUint(queryString, blocklistFilter) {
     } else {
         returndata.list = false;
     }
-    let response = new Response(JSON.stringify(returndata));
-    response.headers.set("Content-Type", "application/json");
-    return response;
+    return jsonResponse(returndata);
 }
 function listToB64(queryString, blocklistFilter) {
     let list = queryString.get("list") || [];
@@ -6779,9 +6786,7 @@ function listToB64(queryString, blocklistFilter) {
     returndata.inputList = list;
     returndata.flagVersion = flagVersion;
     returndata.b64String = blocklistFilter.getB64FlagFromTag(list.split(","), flagVersion);
-    let response = new Response(JSON.stringify(returndata));
-    response.headers.set("Content-Type", "application/json");
-    return response;
+    return jsonResponse(returndata);
 }
 function b64ToList(queryString, blocklistFilter) {
     let b64 = queryString.get("b64") || "";
@@ -6800,9 +6805,12 @@ function b64ToList(queryString, blocklistFilter) {
     } else {
         returndata.list = "Invalid B64 String";
     }
-    response = new Response(JSON.stringify(returndata));
-    response.headers.set("Content-Type", "application/json");
-    return response;
+    return jsonResponse(returndata);
+}
+function jsonResponse(obj) {
+    return new Response(JSON.stringify(obj), {
+        headers: util.jsonHeaders()
+    });
 }
 class UserOperation {
     constructor(){
@@ -6892,7 +6900,7 @@ class RethinkPlugin {
         this.parameter = new Map(envManager.getMap());
         this.registerParameter("request", event.request);
         this.registerParameter("event", event);
-        this.registerParameter("isDnsMsg", event.request.headers.get("Accept") == "application/dns-message" || event.request.headers.get("Content-Type") == "application/dns-message");
+        this.registerParameter("isDnsMsg", isDnsMsg(event.request));
         this.plugin = [];
         this.registerPlugin("userOperation", userOperation, [
             "dnsResolverUrl",
@@ -6917,7 +6925,8 @@ class RethinkPlugin {
         this.registerPlugin("commandControl", commandControl, [
             "request",
             "blocklistFilter",
-            "latestTimestamp"
+            "latestTimestamp",
+            "isDnsMsg", 
         ], commandControlCallBack, false);
         this.registerPlugin("dnsBlock", dnsBlock, [
             "requestDecodedDnsPacket",
@@ -7080,8 +7089,8 @@ function generateParam(parameter, list) {
     }
     return param;
 }
-async function getBodyBuffer(request, isDnsMsg) {
-    if (!isDnsMsg) {
+async function getBodyBuffer(request, isDnsMsg2) {
+    if (!isDnsMsg2) {
         return "";
     }
     if (request.method.toUpperCase() === "GET") {
@@ -7309,15 +7318,14 @@ async function proxyRequest(event) {
     try {
         if (event.request.method === "OPTIONS") {
             const res = new Response(null, {
-                status: 204
+                status: 204,
+                headers: corsHeaders()
             });
-            corsHeaders(res);
             return res;
         }
         const currentRequest = new CurrentRequest();
         const plugin = new RethinkPlugin(event);
         await plugin.executePlugin(currentRequest);
-        dohHeaders(event.request, currentRequest.httpResponse);
         return currentRequest.httpResponse;
     } catch (err) {
         log.e(err.stack);
@@ -7326,15 +7334,17 @@ async function proxyRequest(event) {
 }
 function errorOrServfail(event, err) {
     if (fromBrowser(event)) {
-        const res = new Response(JSON.stringify(e.stack));
-        browserHeaders(res);
+        const res = new Response(JSON.stringify(e.stack), {
+            headers: browserHeaders()
+        });
         return res;
     }
     return servfail1(event);
 }
 function servfail1(event) {
-    const res = new Response(servfail);
-    dohHeaders(event.request, res);
+    const res = new Response(servfail, {
+        headers: dohHeaders(event.request)
+    });
     return res;
 }
 const { TERMINATE_TLS , TLS_CRT_PATH , TLS_KEY_PATH  } = Deno.env.toObject();
