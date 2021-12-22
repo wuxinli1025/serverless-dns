@@ -6700,26 +6700,50 @@ class CommandControl {
         }
         return response;
     }
+    isConfigureCmd(s) {
+        return s === "configure" || s === "config";
+    }
+    isDohGetRequest(queryString) {
+        return queryString && queryString.has("dns");
+    }
+    userFlag(url, isDnsCmd = false) {
+        const emptyFlag = "";
+        const p = url.pathname.split("/");
+        const d = url.host.split(".");
+        if (this.isConfigureCmd(p[1])) {
+            return p.length >= 3 ? p[2] : emptyFlag;
+        }
+        if (isDnsCmd) {
+            return emptyFlag;
+        } else {
+            if (p[1]) {
+                return p[1];
+            } else {
+                return d.length > 1 ? d[0] : emptyFlag;
+            }
+        }
+    }
     commandOperation(url, blocklistFilter, isDnsMsg1) {
-        let response = {
-        };
-        response.isException = false;
-        response.exceptionStack = "";
-        response.exceptionFrom = "";
-        response.data = {
+        const response = {
+            isException: false,
+            exceptionStack: "",
+            exceptionFrom: "",
+            data: {
+                httpResponse: null,
+                stopProcessing: true
+            }
         };
         try {
-            response.data.stopProcessing = true;
-            response.data.httpResponse;
             const reqUrl = new URL(url);
             const queryString = reqUrl.searchParams;
             const pathSplit = reqUrl.pathname.split("/");
-            let command = pathSplit[1];
-            if (!command) {
-                const d = reqUrl.host.split(".");
-                command = d.length > 3 && d[2] === "rethinkdns" ? d[0] : "";
+            const isDnsCmd = isDnsMsg1 || this.isDohGetRequest(queryString);
+            if (isDnsCmd) {
+                response.data.stopProcessing = false;
+                return response;
             }
-            const weburl = command == "" ? "https://rethinkdns.com/configure" : "https://rethinkdns.com/configure?s=added#" + command;
+            let command = pathSplit[1];
+            const b64UserFlag = this.userFlag(reqUrl, isDnsCmd);
             if (command == "listtob64") {
                 response.data.httpResponse = listToB64(queryString, blocklistFilter);
             } else if (command == "b64tolist") {
@@ -6728,16 +6752,8 @@ class CommandControl {
                 response.data.httpResponse = domainNameToList(queryString, blocklistFilter, this.latestTimestamp);
             } else if (command == "dntouint") {
                 response.data.httpResponse = domainNameToUint(queryString, blocklistFilter);
-            } else if (command == "config" || command == "configure") {
-                let b64UserFlag = "";
-                if (pathSplit.length >= 3) {
-                    b64UserFlag = pathSplit[2];
-                }
-                response.data.httpResponse = configRedirect(b64UserFlag, reqUrl.origin, this.latestTimestamp);
-            } else if (!isDnsMsg1) {
-                response.data.httpResponse = Response.redirect(weburl, 302);
-            } else if (queryString.has("dns")) {
-                response.data.stopProcessing = false;
+            } else if (command == "config" || command == "configure" || !isDnsCmd) {
+                response.data.httpResponse = configRedirect(b64UserFlag, reqUrl.origin, this.latestTimestamp, !isDnsCmd);
             } else {
                 response.data.httpResponse = new Response(null, {
                     status: 400,
@@ -6753,10 +6769,16 @@ class CommandControl {
         return response;
     }
 }
-function configRedirect(b64UserFlag, requestUrlOrigin, latestTimestamp) {
-    let base = "https://rethinkdns.com/configure";
-    let query = "?v=ext&u=" + requestUrlOrigin + "&tstamp=" + latestTimestamp + "#" + b64UserFlag;
-    return Response.redirect(base + query, 302);
+function isRethinkDns(hostname) {
+    return hostname.indexOf("rethinkdns") >= 0 || hostname.indexOf("bravedns") >= 0;
+}
+function configRedirect(userFlag, origin, timestamp, highlight) {
+    const u = "https://rethinkdns.com/configure";
+    let q = "?tstamp=" + timestamp;
+    q += !isRethinkDns(origin) ? "&v=ext&u=" + origin : "";
+    q += highlight ? "&s=added" : "";
+    q += "#" + userFlag;
+    return Response.redirect(u + q, 302);
 }
 function domainNameToList(queryString, blocklistFilter, latestTimestamp) {
     let domainName = queryString.get("dn") || "";
