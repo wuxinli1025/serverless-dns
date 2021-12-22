@@ -6373,9 +6373,9 @@ class DNSResolver {
         return cacheRes;
     }
     resolveFromLocalCache(queryId, key) {
-        const cacheRes = this.dnsResCache.Get(key);
-        if (!cacheRes) return false;
-        return this.makeCacheResponse(queryId, cacheRes.dnsPacket, cacheRes.ttlEndTime);
+        const cres = this.dnsResCache.Get(key);
+        if (!cres) return false;
+        return this.makeCacheResponse(queryId, cres.dnsPacket, cres.ttlEndTime);
     }
     async resolveFromHttpCache(queryId, url, key) {
         if (!this.httpCache) return false;
@@ -6387,27 +6387,27 @@ class DNSResolver {
         return this.makeCacheResponse(queryId, dnsPacket, metadata.ttlEndTime);
     }
     makeCacheResponse(queryId, dnsPacket, expiry = null) {
+        if (expiry !== null && expiry < Date.now()) {
+            log.d("mkcache stale", expiry);
+            return false;
+        }
         const decodedDnsPacket = safeBox(()=>{
             return this.dnsParser.Decode(dnsPacket);
         });
         if (!decodedDnsPacket) {
-            log.d("mkcache decode failed", expiry);
+            log.w("mkcache decode failed", expiry);
             return false;
         }
         if (expiry === null) {
             expiry = this.determineCacheExpiry(decodedDnsPacket);
         }
-        if (expiry < Date.now()) {
-            log.d("mkcache stale", expiry);
-            return false;
-        }
-        this.updateTtl(decodedDnsPacket, expiry);
-        this.updateQueryId(decodedDnsPacket, queryId);
+        let reencode = this.updateTtl(decodedDnsPacket, expiry);
+        reencode = this.updateQueryId(decodedDnsPacket, queryId) || reencode;
         const updatedDnsPacket = safeBox(()=>{
-            return this.dnsParser.Encode(decodedDnsPacket);
+            return reencode ? this.dnsParser.Encode(decodedDnsPacket) : dnsPacket;
         });
         if (!updatedDnsPacket) {
-            log.w("mkcache encode failed", decodedDnsPacket, expiry);
+            log.w("mkcache re-encode failed", decodedDnsPacket, expiry);
             return false;
         }
         const cacheRes = {
@@ -6426,6 +6426,7 @@ class DNSResolver {
     }
     updateLocalCacheIfNeeded(k, v) {
         if (!k || !v) return;
+        if (!v.ttlEndTime) return;
         const nv = {
             dnsPacket: v.dnsPacket,
             ttlEndTime: v.ttlEndTime
@@ -6435,6 +6436,7 @@ class DNSResolver {
     updateHttpCacheIfNeeded(param, k, cacheRes) {
         if (!this.httpCache) return;
         if (!k || !cacheRes) return;
+        if (!cacheRes.ttlEndTime) return;
         const cacheUrl = this.httpCacheKey(param.request.url, k);
         const value = new Response(cacheRes.dnsPacket, {
             headers: this.httpCacheHeaders(cacheRes, param.blocklistFilter)
@@ -6486,14 +6488,23 @@ class DNSResolver {
         return new URL(new URL(u).origin + "/" + p);
     }
     updateQueryId(decodedDnsPacket, queryId) {
+        if (queryId === 0) return false;
+        if (queryId === decodedDnsPacket.id) return false;
         decodedDnsPacket.id = queryId;
+        return true;
     }
     updateTtl(decodedDnsPacket, end) {
+        let updated = false;
         const now = Date.now();
+        if (end < now) return updated;
         const outttl = Math.max(Math.floor((end - now) / 1000), 30);
         for (let a of decodedDnsPacket.answers){
-            if (!optAnswer(a)) a.ttl = outttl;
+            if (optAnswer(a)) continue;
+            if (a.ttl === outttl) continue;
+            updated = true;
+            a.ttl = outttl;
         }
+        return updated;
     }
 }
 DNSResolver.prototype.resolveDnsUpstream = async function(request, resolverUrl, requestBodyBuffer) {
