@@ -6834,7 +6834,7 @@ function b64ToList(queryString, blocklistFilter) {
 }
 function jsonResponse(obj) {
     return new Response(JSON.stringify(obj), {
-        headers: util.jsonHeaders()
+        headers: jsonHeaders()
     });
 }
 class UserOperation {
