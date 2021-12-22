@@ -6281,7 +6281,7 @@ function servfail(qid, qs) {
     });
 }
 function requestTimeout() {
-    const t = workersTimeout();
+    const t = workersTimeout(15000);
     return t > 5000 ? Math.min(t, 30000) : 5000;
 }
 function truncated(ans) {
