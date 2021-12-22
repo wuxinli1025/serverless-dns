@@ -7134,7 +7134,7 @@ function base64ToArrayBuffer(base64) {
     }
     return bytes.buffer;
 }
-const _ENV_MAPPINGS = {
+const _RUNTIME_ENV_MAPPINGS = {
     runTime: "RUNTIME",
     runTimeEnv: {
         worker: "WORKER_ENV",
@@ -7167,11 +7167,11 @@ const _ENV_MAPPINGS = {
         worker: "IS_AGGRESSIVE_CACHE_REQ"
     }
 };
-function _loadEnv(runtime) {
-    console.info("Loading env. from runtime: ", runtime);
+function _getRuntimeEnv(runtime) {
+    console.info("Loading env. from runtime:", runtime);
     const env = {
     };
-    for (const [key, value] of Object.entries(_ENV_MAPPINGS)){
+    for (const [key, value] of Object.entries(_RUNTIME_ENV_MAPPINGS)){
         let name = null;
         let type = "string";
         if (typeof value === "string") {
@@ -7196,18 +7196,21 @@ function _getRuntime() {
 }
 class EnvManager {
     constructor(){
+        if (globalThis.env) throw new Error("envManager is already initialized.");
+        globalThis.env = {
+        };
         this.envMap = new Map();
         this.isLoaded = false;
     }
     loadEnv() {
         const runtime = _getRuntime();
-        const env = _loadEnv(runtime);
+        const env = _getRuntimeEnv(runtime);
         for (const [key, value] of Object.entries(env)){
             this.envMap.set(key, value);
         }
         runtime == "worker" && this.envMap.set("workerTimeout", Number(WORKER_TIMEOUT) + Number(CF_BLOCKLIST_DOWNLOAD_TIMEOUT));
-        console.debug("Loaded env: ", runtime == "worker" && JSON.stringify(Object.fromEntries(this.envMap)) || Object.fromEntries(this.envMap));
-        globalThis.env = Object.fromEntries(this.envMap);
+        console.debug("Loaded env: ", runtime == "worker" && JSON.stringify(this.toObject()) || this.toObject());
+        globalThis.env = this.toObject();
         this.isLoaded = true;
     }
     getMap() {
@@ -7219,9 +7222,9 @@ class EnvManager {
     get(key) {
         return this.envMap.get(key);
     }
-    put(key, value) {
+    set(key, value) {
         this.envMap.set(key, value);
-        globalThis.env = Object.fromEntries(this.envMap);
+        globalThis.env = this.toObject();
     }
 }
 const _LOG_LEVELS = new Map([
@@ -7298,6 +7301,7 @@ class Log {
             default:
             case "debug":
                 this.d = console.debug;
+                this.debug = console.debug;
             case "timer":
                 this.lapTime = console.timeLog;
                 this.startTime = function(name) {
@@ -7308,10 +7312,13 @@ class Log {
                 this.endTime = console.timeEnd;
             case "info":
                 this.i = console.info;
+                this.info = console.info;
             case "warn":
                 this.w = console.warn;
+                this.warn = console.warn;
             case "error":
                 this.e = console.error;
+                this.error = console.error;
         }
         this.level = level;
     }
