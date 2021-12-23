@@ -6713,15 +6713,9 @@ class CommandControl {
         if (this.isConfigureCmd(p[1])) {
             return p.length >= 3 ? p[2] : emptyFlag;
         }
-        if (isDnsCmd) {
-            return emptyFlag;
-        } else {
-            if (p[1]) {
-                return p[1];
-            } else {
-                return d.length > 1 ? d[0] : emptyFlag;
-            }
-        }
+        if (isDnsCmd) return emptyFlag;
+        if (p[1]) return p[1];
+        return d.length > 1 ? d[0] : emptyFlag;
     }
     commandOperation(url, blocklistFilter, isDnsMsg1) {
         const response = {
@@ -6777,7 +6771,7 @@ function configRedirect(userFlag, origin, timestamp, highlight) {
     let q = "?tstamp=" + timestamp;
     q += !isRethinkDns(origin) ? "&v=ext&u=" + origin : "";
     q += highlight ? "&s=added" : "";
-    q += "#" + userFlag;
+    q += userFlag ? "#" + userFlag : "";
     return Response.redirect(u + q, 302);
 }
 function domainNameToList(queryString, blocklistFilter, latestTimestamp) {
