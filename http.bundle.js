@@ -5000,6 +5000,9 @@ function errResponse(id, err) {
         data: false
     };
 }
+function emptyString(str) {
+    return !str || str.length === 0;
+}
 class DNSBlockOperation {
     checkDomainBlocking(userBlocklistFlagUint, userServiceListUint, flagVersion, blocklistMap, blocklistFilter, domainName) {
         let response;
@@ -5066,7 +5069,7 @@ class DNSBlock {
         response.data.isBlocked = false;
         response.data.blockedB64Flag = "";
         try {
-            if (param.userBlocklistInfo.userBlocklistFlagUint.length !== "") {
+            if (hasBlocklistStamp(param)) {
                 let domainNameBlocklistInfo;
                 if (param.requestDecodedDnsPacket.questions.length >= 1 && (param.requestDecodedDnsPacket.questions[0].type == "A" || param.requestDecodedDnsPacket.questions[0].type == "AAAA" || param.requestDecodedDnsPacket.questions[0].type == "CNAME" || param.requestDecodedDnsPacket.questions[0].type == "HTTPS" || param.requestDecodedDnsPacket.questions[0].type == "SVCB")) {
                     domainNameBlocklistInfo = param.blocklistFilter.getDomainInfo(param.requestDecodedDnsPacket.questions[0].name);
@@ -5090,6 +5093,9 @@ class DNSBlock {
         }
         return response;
     }
+}
+function hasBlocklistStamp(param) {
+    return param && param.userBlocklistInfo && !emptyString(param.userBlocklistInfo.userBlocklistFlagUint);
 }
 function toCacheApi(param, wCache, domainNameBlocklistInfo) {
     const dn = param.requestDecodedDnsPacket.questions[0].name.trim().toLowerCase() + ":" + param.requestDecodedDnsPacket.questions[0].type;
@@ -5123,7 +5129,7 @@ class DNSResponseBlock {
         response.data.isBlocked = false;
         response.data.blockedB64Flag = "";
         try {
-            if (param.userBlocklistInfo.userBlocklistFlagUint !== "") {
+            if (hasBlocklistStamp1(param)) {
                 if (param.responseDecodedDnsPacket.answers.length > 0 && param.responseDecodedDnsPacket.answers[0].type == "CNAME") {
                     checkCnameBlock(param, response, this.dnsBlockOperation);
                 } else if (param.responseDecodedDnsPacket.answers.length > 0 && (param.responseDecodedDnsPacket.answers[0].type == "HTTPS" || param.responseDecodedDnsPacket.answers[0].type == "SVCB")) {
@@ -5162,6 +5168,9 @@ function checkCnameBlock(param, response, dnsBlockOperation) {
             response.data = dnsBlockOperation.checkDomainBlocking(param.userBlocklistInfo.userBlocklistFlagUint, param.userBlocklistInfo.userServiceListUint, param.userBlocklistInfo.flagVersion, domainNameBlocklistInfo.searchResult, param.blocklistFilter, cname);
         }
     }
+}
+function hasBlocklistStamp1(param) {
+    return param && param.userBlocklistInfo && !emptyString(param.userBlocklistInfo.userBlocklistFlagUint);
 }
 const BASE64 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_";
 const config1 = {
@@ -5861,6 +5870,7 @@ class BlocklistFilter {
         return toUint(flag);
     }
     flagIntersection(flag1, flag2) {
+        if (emptyString(flag1) || emptyString(flag2)) return false;
         try {
             let flag1Header = flag1[0];
             let flag2Header = flag2[0];
@@ -6249,7 +6259,7 @@ async function parseCacheapiResponse(cacheResponse, dnsParser, dnsBlockOperation
     let metaData = JSON.parse(cacheResponse.headers.get("x-rethink-metadata"));
     console.debug("Response Found at CacheApi");
     console.debug(JSON.stringify(metaData));
-    if ((reqDecodedDnsPacket.questions[0].type == "A" || reqDecodedDnsPacket.questions[0].type == "AAAA" || reqDecodedDnsPacket.questions[0].type == "CNAME" || reqDecodedDnsPacket.questions[0].type == "HTTPS" || reqDecodedDnsPacket.questions[0].type == "SVCB") && metaData.blocklistInfo && userBlocklistInfo.userBlocklistFlagUint !== "") {
+    if ((reqDecodedDnsPacket.questions[0].type == "A" || reqDecodedDnsPacket.questions[0].type == "AAAA" || reqDecodedDnsPacket.questions[0].type == "CNAME" || reqDecodedDnsPacket.questions[0].type == "HTTPS" || reqDecodedDnsPacket.questions[0].type == "SVCB") && metaData.blocklistInfo && !emptyString(userBlocklistInfo.userBlocklistFlagUint)) {
         metaData.blocklistInfo = new Map(Object.entries(metaData.blocklistInfo));
         let blockResponse = dnsBlockOperation.checkDomainBlocking(userBlocklistInfo.userBlocklistFlagUint, userBlocklistInfo.userServiceListUint, userBlocklistInfo.flagVersion, metaData.blocklistInfo, blocklistFilter, reqDecodedDnsPacket.questions[0].name.trim().toLowerCase());
         if (blockResponse.isBlocked) {
@@ -6594,7 +6604,7 @@ DNSResolver.prototype.doh2 = async function(request) {
 class CurrentRequest {
     constructor(){
         this.blockedB64Flag = "";
-        this.decodedDnsPacket = undefined;
+        this.decodedDnsPacket = this.emptyDecodedDnsPacket();
         this.httpResponse = undefined;
         this.isException = false;
         this.exceptionStack = undefined;
@@ -6605,16 +6615,30 @@ class CurrentRequest {
         this.stopProcessing = false;
         this.dnsParser = new DNSParserWrap();
     }
+    emptyDecodedDnsPacket() {
+        return {
+            id: 0,
+            questions: null
+        };
+    }
+    initDecodedDnsPacketIfNeeded() {
+        if (!this.decodedDnsPacket) {
+            this.decodedDnsPacket = this.emptyDecodedDnsPacket();
+        }
+    }
     dnsExceptionResponse() {
+        this.initDecodedDnsPacketIfNeeded();
         const qid = this.decodedDnsPacket.id;
         const questions = this.decodedDnsPacket.questions;
         const ex = {
             exceptionFrom: this.exceptionFrom,
             exceptionStack: this.exceptionStack
         };
-        this.httpResponse = new Response(servfail(qid, questions), {
+        const servfail2 = servfail(qid, questions);
+        this.httpResponse = new Response({
+            servfail: servfail2,
             headers: concatHeaders(this.headers(), this.additionalHeader(JSON.stringify(ex))),
-            status: 200
+            status: servfail2 ? 200 : 500
         });
     }
     customResponse(x) {
@@ -6628,6 +6652,7 @@ class CurrentRequest {
         });
     }
     dnsBlockResponse() {
+        this.initDecodedDnsPacketIfNeeded();
         try {
             this.decodedDnsPacket.type = "response";
             this.decodedDnsPacket.rcode = "NOERROR";
@@ -6894,7 +6919,7 @@ class UserOperation {
                 let response = this.blocklistFilter.unstamp(blocklistFlag);
                 currentUser.userBlocklistFlagUint = response.userBlocklistFlagUint;
                 currentUser.flagVersion = response.flagVersion;
-                if (currentUser.userBlocklistFlagUint !== "") {
+                if (!emptyString(currentUser.userBlocklistFlagUint)) {
                     currentUser.userServiceListUint = this.blocklistFilter.flagIntersection(currentUser.userBlocklistFlagUint, this.blocklistFilter.wildCardUint);
                 } else {
                     blocklistFlag = "";
