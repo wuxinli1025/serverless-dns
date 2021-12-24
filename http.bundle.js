@@ -4914,9 +4914,7 @@ class LocalCache {
         }
     }
 }
-function fromBrowser(req) {
-    if (!req || !req.headers) return false;
-    const ua = req.headers.get("User-Agent");
+function fromBrowser(ua) {
     return ua && ua.startsWith("Mozilla/5.0");
 }
 function jsonHeaders() {
@@ -4947,6 +4945,15 @@ function contentLengthHeader(b) {
 }
 function concatHeaders() {
     return Object.assign(...arguments);
+}
+function copyHeaders(request) {
+    const headers = {
+    };
+    if (!request || !request.headers) return headers;
+    request.headers.forEach((val, name)=>{
+        headers[name] = val;
+    });
+    return headers;
 }
 function arrayBufferOf(buf) {
     if (!buf) return null;
@@ -4992,6 +4999,16 @@ function errResponse(id, err) {
         exceptionFrom: id,
         data: false
     };
+}
+function transformPseudoHeaders(headers) {
+    const resH = {
+    };
+    if (!headers) return resH;
+    for(const name in headers){
+        if (name.startsWith(":")) resH[name.slice(1)] = headers[name];
+        else resH[name] = headers[name];
+    }
+    return resH;
 }
 class DNSBlockOperation {
     checkDomainBlocking(userBlocklistFlagUint, userServiceListUint, flagVersion, blocklistMap, blocklistFilter, domainName) {
@@ -6551,11 +6568,7 @@ DNSResolver.prototype.doh2 = async function(request) {
     const http2 = this.http2;
     const u = new URL(request.url);
     const reqB = bufferOf(await request.arrayBuffer());
-    const headers1 = {
-    };
-    request.headers.forEach((v, k)=>{
-        headers1[k] = v;
-    });
+    const headers1 = copyHeaders(request);
     return new Promise((resolve, reject)=>{
         const authority = u.origin;
         const c = http2.connect(authority);
@@ -6569,12 +6582,7 @@ DNSResolver.prototype.doh2 = async function(request) {
         });
         req.on("response", (headers)=>{
             const resBuffers = [];
-            const resH = {
-            };
-            for(const k in headers){
-                if (k.startsWith(":")) resH[k.slice(1)] = headers[k];
-                else resH[k] = headers[k];
-            }
+            const resH = transformPseudoHeaders(headers);
             req.on("data", (chunk)=>{
                 resBuffers.push(chunk);
             });
@@ -7383,11 +7391,11 @@ async function proxyRequest(event) {
         return currentRequest.httpResponse;
     } catch (err) {
         log.e(err.stack);
-        return errorOrServfail(req, err);
+        return errorOrServfail(event.request, err);
     }
 }
-function optionsRequest(req) {
-    return req.method === "OPTIONS";
+function optionsRequest(request) {
+    return request.method === "OPTIONS";
 }
 function respond204() {
     return new Response(null, {
@@ -7395,8 +7403,9 @@ function respond204() {
         headers: corsHeaders()
     });
 }
-function errorOrServfail(req, err) {
-    if (!fromBrowser(req)) return servfail1();
+function errorOrServfail(request, err) {
+    const UA = request.headers.get("User-Agent");
+    if (!fromBrowser(UA)) return servfail1();
     const res = new Response(JSON.stringify(err.stack), {
         status: 503,
         headers: browserHeaders()
