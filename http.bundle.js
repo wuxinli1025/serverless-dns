@@ -6635,8 +6635,7 @@ class CurrentRequest {
             exceptionStack: this.exceptionStack
         };
         const servfail2 = servfail(qid, questions);
-        this.httpResponse = new Response({
-            servfail: servfail2,
+        this.httpResponse = new Response(servfail2, {
             headers: concatHeaders(this.headers(), this.additionalHeader(JSON.stringify(ex))),
             status: servfail2 ? 200 : 500
         });
