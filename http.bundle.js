@@ -5000,16 +5000,6 @@ function errResponse(id, err) {
         data: false
     };
 }
-function transformPseudoHeaders(headers) {
-    const resH = {
-    };
-    if (!headers) return resH;
-    for(const name in headers){
-        if (name.startsWith(":")) resH[name.slice(1)] = headers[name];
-        else resH[name] = headers[name];
-    }
-    return resH;
-}
 class DNSBlockOperation {
     checkDomainBlocking(userBlocklistFlagUint, userServiceListUint, flagVersion, blocklistMap, blocklistFilter, domainName) {
         let response;
@@ -6334,6 +6324,7 @@ class DNSResolver {
         this.dnsResCache = null;
         this.httpCache = null;
         this.http2 = null;
+        this.nodeUtil = null;
         this.transport = null;
     }
     async lazyInit() {
@@ -6345,6 +6336,7 @@ class DNSResolver {
         }
         if (isNode() && !this.http2) {
             this.http2 = await import("http2");
+            this.nodeUtil = await import("../helpers/node/util.js");
         }
         if (isNode() && !this.transport) {
             this.transport = new (await import("../helpers/node/dns-transport.js")).Transport(quad1, 53);
@@ -6566,6 +6558,7 @@ DNSResolver.prototype.resolveDnsUpstream = async function(request, resolverUrl, 
 DNSResolver.prototype.doh2 = async function(request) {
     console.debug("upstream using h2");
     const http2 = this.http2;
+    const transformPseudoHeaders = this.nodeUtil.transformPseudoHeaders;
     const u = new URL(request.url);
     const reqB = bufferOf(await request.arrayBuffer());
     const headers1 = copyHeaders(request);
