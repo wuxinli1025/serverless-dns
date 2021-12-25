@@ -4931,7 +4931,8 @@ function dnsHeaders() {
 function corsHeaders() {
     return {
         "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Headers": "*"
+        "Access-Control-Allow-Headers": "*",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS"
     };
 }
 function browserHeaders() {
@@ -6704,6 +6705,11 @@ class CurrentRequest {
             "x-nile-add": json
         };
     }
+    setCorsHeaders() {
+        for (const [name, value] of Object.entries(corsHeaders())){
+            this.httpResponse.headers.set(name, value);
+        }
+    }
 }
 class CommandControl {
     constructor(){
@@ -6722,6 +6728,11 @@ class CommandControl {
         response.data.stopProcessing = false;
         if (param.request.method === "GET") {
             response = this.commandOperation(param.request.url, param.blocklistFilter, param.isDnsMsg);
+        } else if (param.request.method !== "POST") {
+            response.data.httpResponse = new Response(null, {
+                status: 405,
+                statusText: "Method Not Allowed"
+            });
         }
         return response;
     }
@@ -7405,6 +7416,7 @@ async function proxyRequest(event) {
         const currentRequest = new CurrentRequest();
         const plugin = new RethinkPlugin(event);
         await plugin.executePlugin(currentRequest);
+        if (fromBrowser(event.request.headers.get("User-Agent"))) currentRequest.setCorsHeaders();
         return currentRequest.httpResponse;
     } catch (err) {
         log.e(err.stack);
