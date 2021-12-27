@@ -7238,6 +7238,7 @@ function _getRuntimeEnv(runtime) {
         else throw new Error(`Unknown runtime: ${runtime}`);
         if (type === "boolean") env[key] = !!env[key];
         else if (type === "number") env[key] = Number(env[key]);
+        else if (type === "string") env[key] = env[key] || "";
     }
     return env;
 }
