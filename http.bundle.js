@@ -7395,8 +7395,8 @@ function initEnvIfNeeded() {
     if (!envManager.isLoaded) {
         envManager.loadEnv();
     }
-    if (!globalThis.log && !console.level) {
-        globalThis.log = new Log(env.logLevel, env.runTimeEnv === "production");
+    if (!globalThis.log) {
+        globalThis.log = new Log(env.logLevel, !console.level && env.runTimeEnv === "production");
     }
 }
 function handleRequest(event) {
@@ -7417,7 +7417,8 @@ async function proxyRequest(event) {
         const currentRequest = new CurrentRequest();
         const plugin = new RethinkPlugin(event);
         await plugin.executePlugin(currentRequest);
-        if (fromBrowser(event.request.headers.get("User-Agent"))) currentRequest.setCorsHeaders();
+        const ua = event.request.headers.get("User-Agent");
+        if (fromBrowser(ua)) currentRequest.setCorsHeaders();
         return currentRequest.httpResponse;
     } catch (err) {
         log.e(err.stack);
