@@ -108,16 +108,6 @@ try {
 } catch (e) {
     console.warn(".env file may not be loaded => ", e.name, ":", e.message);
 }
-function isWorkers() {
-    return env && env.runTime === "worker";
-}
-function isNode() {
-    return env && env.runTime === "node";
-}
-function workersTimeout(defaultValue = 0) {
-    if (envManager) return envManager.get("workerTimeout") || defaultValue;
-    return defaultValue;
-}
 const hexTable = new TextEncoder().encode("0123456789abcdef");
 function errInvalidByte(__byte) {
     return new TypeError(`Invalid byte '${String.fromCharCode(__byte)}'`);
@@ -2196,19 +2186,19 @@ function base64ByteLength(str, bytes) {
     if (bytes > 1 && str.charCodeAt(bytes - 1) === 61) bytes--;
     return bytes * 3 >>> 2;
 }
-class Buffer extends Uint8Array {
+class Buffer1 extends Uint8Array {
     static alloc(size, fill, encoding = "utf8") {
         if (typeof size !== "number") {
             throw new TypeError(`The "size" argument must be of type number. Received type ${typeof size}`);
         }
-        const buf = new Buffer(size);
+        const buf = new Buffer1(size);
         if (size === 0) return buf;
         let bufFill;
         if (typeof fill === "string") {
             const clearEncoding = checkEncoding(encoding);
             if (typeof fill === "string" && fill.length === 1 && clearEncoding === "utf8") {
                 buf.fill(fill.charCodeAt(0));
-            } else bufFill = Buffer.from(fill, clearEncoding);
+            } else bufFill = Buffer1.from(fill, clearEncoding);
         } else if (typeof fill === "number") {
             buf.fill(fill);
         } else if (fill instanceof Uint8Array) {
@@ -2234,7 +2224,7 @@ class Buffer extends Uint8Array {
         return buf;
     }
     static allocUnsafe(size) {
-        return new Buffer(size);
+        return new Buffer1(size);
     }
     static byteLength(string8, encoding = "utf8") {
         if (typeof string8 != "string") return string8.byteLength;
@@ -2248,12 +2238,12 @@ class Buffer extends Uint8Array {
                 totalLength += buf.length;
             }
         }
-        const buffer = Buffer.allocUnsafe(totalLength);
+        const buffer = Buffer1.allocUnsafe(totalLength);
         let pos = 0;
         for (const item of list){
             let buf;
-            if (!(item instanceof Buffer)) {
-                buf = Buffer.from(item);
+            if (!(item instanceof Buffer1)) {
+                buf = Buffer1.from(item);
             } else {
                 buf = item;
             }
@@ -2268,15 +2258,15 @@ class Buffer extends Uint8Array {
         if (typeof value == "string") {
             encoding = checkEncoding(encoding, false);
             if (encoding === "hex") {
-                return new Buffer(decode(new TextEncoder().encode(value)).buffer);
+                return new Buffer1(decode(new TextEncoder().encode(value)).buffer);
             }
-            if (encoding === "base64") return new Buffer(decode1(value).buffer);
-            return new Buffer(new TextEncoder().encode(value).buffer);
+            if (encoding === "base64") return new Buffer1(decode1(value).buffer);
+            return new Buffer1(new TextEncoder().encode(value).buffer);
         }
-        return new Buffer(value, offset, length);
+        return new Buffer1(value, offset, length);
     }
     static isBuffer(obj) {
-        return obj instanceof Buffer;
+        return obj instanceof Buffer1;
     }
     static isEncoding(encoding) {
         return typeof encoding === "string" && encoding.length !== 0 && normalizeEncoding(encoding) !== undefined;
@@ -2471,6 +2461,232 @@ class Buffer extends Uint8Array {
 }
 globalThis.atob;
 globalThis.btoa;
+function fromBrowser(ua) {
+    return ua && ua.startsWith("Mozilla/5.0");
+}
+function jsonHeaders() {
+    return {
+        "Content-Type": "application/json"
+    };
+}
+function dnsHeaders() {
+    return {
+        "Accept": "application/dns-message",
+        "Content-Type": "application/dns-message"
+    };
+}
+function corsHeaders() {
+    return {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "*",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS"
+    };
+}
+function browserHeaders() {
+    return Object.assign(jsonHeaders(), corsHeaders());
+}
+function contentLengthHeader(b) {
+    const len = !b || !b.byteLength ? "0" : b.byteLength.toString();
+    return {
+        "Content-Length": len
+    };
+}
+function concatHeaders() {
+    return Object.assign(...arguments);
+}
+function copyHeaders(request) {
+    const headers = {
+    };
+    if (!request || !request.headers) return headers;
+    request.headers.forEach((val, name)=>{
+        headers[name] = val;
+    });
+    return headers;
+}
+function objOf(map) {
+    return map.entries ? Object.fromEntries(map) : false;
+}
+function arrayBufferOf(buf) {
+    if (!buf) return null;
+    const offset = buf.byteOffset;
+    const len = buf.byteLength;
+    return buf.buffer.slice(offset, offset + len);
+}
+function bufferOf(arrayBuf) {
+    if (!arrayBuf) return null;
+    return Buffer1.from(new Uint8Array(arrayBuf));
+}
+function timeout(ms, callback) {
+    return setTimeout(callback, ms);
+}
+function uid() {
+    return (Math.random() + 1).toString(36).slice(1);
+}
+function isDnsMsg(req) {
+    return req.headers.get("Accept") === "application/dns-message" || req.headers.get("Content-Type") === "application/dns-message";
+}
+function emptyResponse() {
+    return {
+        isException: false,
+        exceptionStack: "",
+        exceptionFrom: "",
+        data: false
+    };
+}
+function errResponse(id, err) {
+    return {
+        isException: true,
+        exceptionStack: err.stack,
+        exceptionFrom: id,
+        data: false
+    };
+}
+function mapOf(obj) {
+    return new Map(Object.entries(obj));
+}
+function emptyString(str) {
+    return !str || str.length === 0;
+}
+function isWorkers() {
+    return env && env.runTimeEnv === "worker";
+}
+function isNode() {
+    return env && env.runTime === "node";
+}
+function workersTimeout(defaultValue = 0) {
+    if (envManager) return envManager.get("workerTimeout") || defaultValue;
+    return defaultValue;
+}
+function isBlocklistFiter(blf) {
+    return blf && blf.t && blf.ft;
+}
+function doBlock(blf, userBlInfo, key, cf) {
+    let blInfo = getDomainInfo(blf, cf, key);
+    console.debug("blocklist filter result : ", JSON.stringify(blInfo));
+    if (!blInfo) return false;
+    let response = checkDomainBlocking(userBlInfo.userBlocklistFlagUint, userBlInfo.flagVersion, blInfo, key);
+    if (response && response.isBlocked) return response;
+    if (!userBlInfo.userServiceListUint) return response;
+    return checkWildcardBlocking(userBlInfo.userServiceListUint, userBlInfo.flagVersion, blInfo, key);
+}
+function getDomainInfo(blf, cf, key) {
+    if (isBlocklistFiter(blf)) {
+        return blf.getDomainInfo(key).searchResult;
+    }
+    if (!cf && !cf.hasOwnProperty(key)) return false;
+    return mapOf(cf[key]);
+}
+function checkDomainBlocking(ufUint, flagVersion, blocklistMap, dn) {
+    try {
+        let dnUint = blocklistMap.get(dn);
+        if (!dnUint) return false;
+        return checkFlagIntersection(ufUint, dnUint, flagVersion, blocklistMap, dn);
+    } catch (e1) {
+        throw e1;
+    }
+}
+function checkWildcardBlocking(wcUint, flagVersion, blocklistMap, dn) {
+    let dnSplit = dn.split(".");
+    let dnJoin = "";
+    let response = {
+    };
+    let dnUint;
+    while(dnSplit.shift() != undefined){
+        dnJoin = dnSplit.join(".");
+        dnUint = blocklistMap.get(dn);
+        if (!dnUint) return false;
+        response = checkFlagIntersection(wcUint, dnUint, flagVersion, blocklistMap, dnJoin);
+        if (response && response.isBlocked) {
+            return response;
+        }
+    }
+    return false;
+}
+function checkFlagIntersection(uint1, uint2, flagVersion, blocklistMap, key) {
+    try {
+        let response = {
+        };
+        response.isBlocked = false;
+        response.blockedB64Flag = "";
+        response.blockedTag = [];
+        let dnUint = blocklistMap.get(key);
+        let blockedUint = flagIntersection(uint1, uint2);
+        if (blockedUint) {
+            response.isBlocked = true;
+            response.blockedB64Flag = getB64Flag(blockedUint, flagVersion);
+        } else {
+            blockedUint = new Uint16Array(dnUint);
+            response.blockedB64Flag = getB64Flag(blockedUint, flagVersion);
+        }
+        return response;
+    } catch (e2) {
+        throw e2;
+    }
+}
+function flagIntersection(flag1, flag2) {
+    try {
+        if (emptyString(flag1) || emptyString(flag2)) return false;
+        let flag1Header = flag1[0];
+        let flag2Header = flag2[0];
+        let intersectHeader = flag1Header & flag2Header;
+        if (intersectHeader == 0) {
+            return false;
+        }
+        let flag1Length = flag1.length - 1;
+        let flag2Length = flag2.length - 1;
+        const intersectBody = [];
+        let tmpInterectHeader = intersectHeader;
+        let maskHeaderForBodyEmpty = 1;
+        let tmpBodyIntersect;
+        for(; tmpInterectHeader != 0;){
+            if ((flag1Header & 1) == 1) {
+                if ((tmpInterectHeader & 1) == 1) {
+                    tmpBodyIntersect = flag1[flag1Length] & flag2[flag2Length];
+                    if (tmpBodyIntersect == 0) {
+                        intersectHeader = intersectHeader ^ maskHeaderForBodyEmpty;
+                    } else {
+                        intersectBody.push(tmpBodyIntersect);
+                    }
+                }
+                flag1Length = flag1Length - 1;
+            }
+            if ((flag2Header & 1) == 1) {
+                flag2Length = flag2Length - 1;
+            }
+            flag1Header = flag1Header >>> 1;
+            tmpInterectHeader = tmpInterectHeader >>> 1;
+            flag2Header = flag2Header >>> 1;
+            maskHeaderForBodyEmpty = maskHeaderForBodyEmpty * 2;
+        }
+        if (intersectHeader == 0) {
+            return false;
+        }
+        const intersectFlag = new Uint16Array(intersectBody.length + 1);
+        let count = 0;
+        intersectFlag[count++] = intersectHeader;
+        let bodyData;
+        while((bodyData = intersectBody.pop()) != undefined){
+            intersectFlag[count++] = bodyData;
+        }
+        return intersectFlag;
+    } catch (e3) {
+        throw e3;
+    }
+}
+function getB64Flag(uint16Arr, flagVersion) {
+    try {
+        if (flagVersion == "0") {
+            return encodeURIComponent(Buffer.from(uint16Arr).toString("base64"));
+        } else if (flagVersion == "1") {
+            return "1:" + encodeURI(btoa(encodeUint16arrToBinary(uint16Arr)).replace(/\//g, "_").replace(/\+/g, "-"));
+        }
+    } catch (e4) {
+        throw e4;
+    }
+}
+function encodeUint16arrToBinary(uint16Arr) {
+    return String.fromCharCode(...new Uint8Array(uint16Arr.buffer));
+}
 "use strict";
 function toString(type) {
     switch(type){
@@ -2909,7 +3125,7 @@ ip.toBuffer = function(ip1, buff, offset) {
     offset = ~~offset;
     var result;
     if (this.isV4Format(ip1)) {
-        result = buff || new Buffer(offset + 4);
+        result = buff || new Buffer1(offset + 4);
         ip1.split(/\./g).map(function(__byte) {
             result[offset++] = parseInt(__byte, 10) & 255;
         });
@@ -2942,7 +3158,7 @@ ip.toBuffer = function(ip1, buff, offset) {
             }
             sections.splice.apply(sections, argv);
         }
-        result = buff || new Buffer(offset + 16);
+        result = buff || new Buffer1(offset + 16);
         for(i7 = 0; i7 < sections.length; i7++){
             var word = parseInt(sections[i7], 16);
             result[offset++] = word >> 8 & 255;
@@ -2994,7 +3210,7 @@ ip.fromPrefixLen = function(prefixlen, family) {
     if (family === "ipv6") {
         len = 16;
     }
-    var buff = new Buffer(len);
+    var buff = new Buffer1(len);
     for(var i9 = 0, n = buff.length; i9 < n; ++i9){
         var bits = 8;
         if (prefixlen < 8) {
@@ -3008,7 +3224,7 @@ ip.fromPrefixLen = function(prefixlen, family) {
 ip.mask = function(addr, mask) {
     addr = ip.toBuffer(addr);
     mask = ip.toBuffer(mask);
-    var result = new Buffer(Math.max(addr.length, mask.length));
+    var result = new Buffer1(Math.max(addr.length, mask.length));
     var i10 = 0;
     if (addr.length === mask.length) {
         for(i10 = 0; i10 < addr.length; i10++){
@@ -3172,7 +3388,7 @@ const NOT_QU_MASK = ~QU_MASK;
 const name1 = {
 };
 name1.encode = function(str, buf, offset) {
-    if (!buf) buf = Buffer.allocUnsafe(name1.encodingLength(str));
+    if (!buf) buf = Buffer1.allocUnsafe(name1.encodingLength(str));
     if (!offset) offset = 0;
     const oldOffset = offset;
     const n = str.replace(/^\.|\.$/gm, "");
@@ -3219,12 +3435,12 @@ name1.decode = function(buf, offset) {
 name1.decode.bytes = 0;
 name1.encodingLength = function(n) {
     if (n === ".") return 1;
-    return Buffer.byteLength(n) + 2;
+    return Buffer1.byteLength(n) + 2;
 };
 const string = {
 };
 string.encode = function(s, buf, offset) {
-    if (!buf) buf = Buffer.allocUnsafe(string.encodingLength(s));
+    if (!buf) buf = Buffer1.allocUnsafe(string.encodingLength(s));
     if (!offset) offset = 0;
     const len = buf.write(s, offset + 1);
     buf[offset] = len;
@@ -3241,7 +3457,7 @@ string.decode = function(buf, offset) {
 };
 string.decode.bytes = 0;
 string.encodingLength = function(s) {
-    return Buffer.byteLength(s) + 1;
+    return Buffer1.byteLength(s) + 1;
 };
 const header = {
 };
@@ -3290,7 +3506,7 @@ header.encodingLength = function() {
 const runknown = {
 };
 runknown.encode = function(data, buf, offset) {
-    if (!buf) buf = Buffer.allocUnsafe(runknown.encodingLength(data));
+    if (!buf) buf = Buffer1.allocUnsafe(runknown.encodingLength(data));
     if (!offset) offset = 0;
     buf.writeUInt16BE(data.length, offset);
     data.copy(buf, offset + 2);
@@ -3312,7 +3528,7 @@ runknown.encodingLength = function(data) {
 const rns = {
 };
 rns.encode = function(data, buf, offset) {
-    if (!buf) buf = Buffer.allocUnsafe(rns.encodingLength(data));
+    if (!buf) buf = Buffer1.allocUnsafe(rns.encodingLength(data));
     if (!offset) offset = 0;
     name1.encode(data, buf, offset + 2);
     buf.writeUInt16BE(name1.encode.bytes, offset);
@@ -3334,7 +3550,7 @@ rns.encodingLength = function(data) {
 const rsoa = {
 };
 rsoa.encode = function(data, buf, offset) {
-    if (!buf) buf = Buffer.allocUnsafe(rsoa.encodingLength(data));
+    if (!buf) buf = Buffer1.allocUnsafe(rsoa.encodingLength(data));
     if (!offset) offset = 0;
     const oldOffset = offset;
     offset += 2;
@@ -3392,13 +3608,13 @@ rtxt.encode = function(data, buf, offset) {
     ];
     for(let i16 = 0; i16 < data.length; i16++){
         if (typeof data[i16] === "string") {
-            data[i16] = Buffer.from(data[i16]);
+            data[i16] = Buffer1.from(data[i16]);
         }
-        if (!Buffer.isBuffer(data[i16])) {
+        if (!Buffer1.isBuffer(data[i16])) {
             throw new Error("Must be a Buffer");
         }
     }
-    if (!buf) buf = Buffer.allocUnsafe(rtxt.encodingLength(data));
+    if (!buf) buf = Buffer1.allocUnsafe(rtxt.encodingLength(data));
     if (!offset) offset = 0;
     const oldOffset = offset;
     offset += 2;
@@ -3439,7 +3655,7 @@ rtxt.encodingLength = function(data) {
     let length = 2;
     data.forEach(function(buf) {
         if (typeof buf === "string") {
-            length += Buffer.byteLength(buf) + 1;
+            length += Buffer1.byteLength(buf) + 1;
         } else {
             length += buf.length + 1;
         }
@@ -3449,10 +3665,10 @@ rtxt.encodingLength = function(data) {
 const rnull = {
 };
 rnull.encode = function(data, buf, offset) {
-    if (!buf) buf = Buffer.allocUnsafe(rnull.encodingLength(data));
+    if (!buf) buf = Buffer1.allocUnsafe(rnull.encodingLength(data));
     if (!offset) offset = 0;
-    if (typeof data === "string") data = Buffer.from(data);
-    if (!data) data = Buffer.allocUnsafe(0);
+    if (typeof data === "string") data = Buffer1.from(data);
+    if (!data) data = Buffer1.allocUnsafe(0);
     const oldOffset = offset;
     offset += 2;
     const len = data.length;
@@ -3476,12 +3692,12 @@ rnull.decode = function(buf, offset) {
 rnull.decode.bytes = 0;
 rnull.encodingLength = function(data) {
     if (!data) return 2;
-    return (Buffer.isBuffer(data) ? data.length : Buffer.byteLength(data)) + 2;
+    return (Buffer1.isBuffer(data) ? data.length : Buffer1.byteLength(data)) + 2;
 };
 const rhinfo = {
 };
 rhinfo.encode = function(data, buf, offset) {
-    if (!buf) buf = Buffer.allocUnsafe(rhinfo.encodingLength(data));
+    if (!buf) buf = Buffer1.allocUnsafe(rhinfo.encodingLength(data));
     if (!offset) offset = 0;
     const oldOffset = offset;
     offset += 2;
@@ -3516,7 +3732,7 @@ const rptr = {
 const rcname = rptr;
 const rdname = rptr;
 rptr.encode = function(data, buf, offset) {
-    if (!buf) buf = Buffer.allocUnsafe(rptr.encodingLength(data));
+    if (!buf) buf = Buffer1.allocUnsafe(rptr.encodingLength(data));
     if (!offset) offset = 0;
     name1.encode(data, buf, offset + 2);
     buf.writeUInt16BE(name1.encode.bytes, offset);
@@ -3537,7 +3753,7 @@ rptr.encodingLength = function(data) {
 const rsrv = {
 };
 rsrv.encode = function(data, buf, offset) {
-    if (!buf) buf = Buffer.allocUnsafe(rsrv.encodingLength(data));
+    if (!buf) buf = Buffer1.allocUnsafe(rsrv.encodingLength(data));
     if (!offset) offset = 0;
     buf.writeUInt16BE(data.priority || 0, offset + 2);
     buf.writeUInt16BE(data.weight || 0, offset + 4);
@@ -3570,7 +3786,7 @@ const rcaa = {
 rcaa.ISSUER_CRITICAL = 1 << 7;
 rcaa.encode = function(data, buf, offset) {
     const len = rcaa.encodingLength(data);
-    if (!buf) buf = Buffer.allocUnsafe(rcaa.encodingLength(data));
+    if (!buf) buf = Buffer1.allocUnsafe(rcaa.encodingLength(data));
     if (!offset) offset = 0;
     if (data.issuerCritical) {
         data.flags = rcaa.ISSUER_CRITICAL;
@@ -3582,7 +3798,7 @@ rcaa.encode = function(data, buf, offset) {
     string.encode(data.tag, buf, offset);
     offset += string.encode.bytes;
     buf.write(data.value, offset);
-    offset += Buffer.byteLength(data.value);
+    offset += Buffer1.byteLength(data.value);
     rcaa.encode.bytes = len;
     return buf;
 };
@@ -3610,7 +3826,7 @@ rcaa.encodingLength = function(data) {
 const rmx = {
 };
 rmx.encode = function(data, buf, offset) {
-    if (!buf) buf = Buffer.allocUnsafe(rmx.encodingLength(data));
+    if (!buf) buf = Buffer1.allocUnsafe(rmx.encodingLength(data));
     if (!offset) offset = 0;
     const oldOffset = offset;
     offset += 2;
@@ -3642,7 +3858,7 @@ rmx.encodingLength = function(data) {
 const ra = {
 };
 ra.encode = function(host, buf, offset) {
-    if (!buf) buf = Buffer.allocUnsafe(ra.encodingLength(host));
+    if (!buf) buf = Buffer1.allocUnsafe(ra.encodingLength(host));
     if (!offset) offset = 0;
     buf.writeUInt16BE(4, offset);
     offset += 2;
@@ -3665,7 +3881,7 @@ ra.encodingLength = function() {
 const raaaa = {
 };
 raaaa.encode = function(host, buf, offset) {
-    if (!buf) buf = Buffer.allocUnsafe(raaaa.encodingLength(host));
+    if (!buf) buf = Buffer1.allocUnsafe(raaaa.encodingLength(host));
     if (!offset) offset = 0;
     buf.writeUInt16BE(16, offset);
     offset += 2;
@@ -3688,7 +3904,7 @@ raaaa.encodingLength = function() {
 const roption = {
 };
 roption.encode = function(option, buf, offset) {
-    if (!buf) buf = Buffer.allocUnsafe(roption.encodingLength(option));
+    if (!buf) buf = Buffer1.allocUnsafe(roption.encodingLength(option));
     if (!offset) offset = 0;
     const oldOffset = offset;
     const code = toCode(option.code);
@@ -3766,7 +3982,7 @@ roption.decode = function(buf, offset) {
             offset += 2;
             option.sourcePrefixLength = buf.readUInt8(offset++);
             option.scopePrefixLength = buf.readUInt8(offset++);
-            const padded = Buffer.alloc(option.family === 1 ? 4 : 16);
+            const padded = Buffer1.alloc(option.family === 1 ? 4 : 16);
             buf.copy(padded, 0, offset, offset + len - 4);
             option.ip = ip.toString(padded);
             break;
@@ -3808,7 +4024,7 @@ roption.encodingLength = function(option) {
 const ropt = {
 };
 ropt.encode = function(options, buf, offset) {
-    if (!buf) buf = Buffer.allocUnsafe(ropt.encodingLength(options));
+    if (!buf) buf = Buffer1.allocUnsafe(ropt.encodingLength(options));
     if (!offset) offset = 0;
     const oldOffset = offset;
     const rdlen = encodingLengthList(options, roption);
@@ -3843,11 +4059,11 @@ rdnskey.PROTOCOL_DNSSEC = 3;
 rdnskey.ZONE_KEY = 128;
 rdnskey.SECURE_ENTRYPOINT = 32768;
 rdnskey.encode = function(key, buf, offset) {
-    if (!buf) buf = Buffer.allocUnsafe(rdnskey.encodingLength(key));
+    if (!buf) buf = Buffer1.allocUnsafe(rdnskey.encodingLength(key));
     if (!offset) offset = 0;
     const oldOffset = offset;
     const keydata = key.key;
-    if (!Buffer.isBuffer(keydata)) {
+    if (!Buffer1.isBuffer(keydata)) {
         throw new Error("Key must be a Buffer");
     }
     offset += 2;
@@ -3886,16 +4102,16 @@ rdnskey.decode = function(buf, offset) {
 };
 rdnskey.decode.bytes = 0;
 rdnskey.encodingLength = function(key) {
-    return 6 + Buffer.byteLength(key.key);
+    return 6 + Buffer1.byteLength(key.key);
 };
 const rrrsig = {
 };
 rrrsig.encode = function(sig, buf, offset) {
-    if (!buf) buf = Buffer.allocUnsafe(rrrsig.encodingLength(sig));
+    if (!buf) buf = Buffer1.allocUnsafe(rrrsig.encodingLength(sig));
     if (!offset) offset = 0;
     const oldOffset = offset;
     const signature = sig.signature;
-    if (!Buffer.isBuffer(signature)) {
+    if (!Buffer1.isBuffer(signature)) {
         throw new Error("Signature must be a Buffer");
     }
     offset += 2;
@@ -3952,12 +4168,12 @@ rrrsig.decode = function(buf, offset) {
 };
 rrrsig.decode.bytes = 0;
 rrrsig.encodingLength = function(sig) {
-    return 20 + name1.encodingLength(sig.signersName) + Buffer.byteLength(sig.signature);
+    return 20 + name1.encodingLength(sig.signersName) + Buffer1.byteLength(sig.signature);
 };
 const rrp = {
 };
 rrp.encode = function(data, buf, offset) {
-    if (!buf) buf = Buffer.allocUnsafe(rrp.encodingLength(data));
+    if (!buf) buf = Buffer1.allocUnsafe(rrp.encodingLength(data));
     if (!offset) offset = 0;
     const oldOffset = offset;
     offset += 2;
@@ -3990,7 +4206,7 @@ rrp.encodingLength = function(data) {
 const typebitmap = {
 };
 typebitmap.encode = function(typelist, buf, offset) {
-    if (!buf) buf = Buffer.allocUnsafe(typebitmap.encodingLength(typelist));
+    if (!buf) buf = Buffer1.allocUnsafe(typebitmap.encodingLength(typelist));
     if (!offset) offset = 0;
     const oldOffset = offset;
     var typesByWindow = [];
@@ -4003,7 +4219,7 @@ typebitmap.encode = function(typelist, buf, offset) {
     }
     for(i18 = 0; i18 < typesByWindow.length; i18++){
         if (typesByWindow[i18] !== undefined) {
-            var windowBuf = Buffer.from(typesByWindow[i18]);
+            var windowBuf = Buffer1.from(typesByWindow[i18]);
             buf.writeUInt8(i18, offset);
             offset += 1;
             buf.writeUInt8(windowBuf.length, offset);
@@ -4057,7 +4273,7 @@ typebitmap.encodingLength = function(typelist) {
 const rnsec = {
 };
 rnsec.encode = function(record, buf, offset) {
-    if (!buf) buf = Buffer.allocUnsafe(rnsec.encodingLength(record));
+    if (!buf) buf = Buffer1.allocUnsafe(rnsec.encodingLength(record));
     if (!offset) offset = 0;
     const oldOffset = offset;
     offset += 2;
@@ -4091,15 +4307,15 @@ rnsec.encodingLength = function(record) {
 const rnsec3 = {
 };
 rnsec3.encode = function(record, buf, offset) {
-    if (!buf) buf = Buffer.allocUnsafe(rnsec3.encodingLength(record));
+    if (!buf) buf = Buffer1.allocUnsafe(rnsec3.encodingLength(record));
     if (!offset) offset = 0;
     const oldOffset = offset;
     const salt = record.salt;
-    if (!Buffer.isBuffer(salt)) {
+    if (!Buffer1.isBuffer(salt)) {
         throw new Error("salt must be a Buffer");
     }
     const nextDomain = record.nextDomain;
-    if (!Buffer.isBuffer(nextDomain)) {
+    if (!Buffer1.isBuffer(nextDomain)) {
         throw new Error("nextDomain must be a Buffer");
     }
     offset += 2;
@@ -4157,11 +4373,11 @@ rnsec3.encodingLength = function(record) {
 const rds = {
 };
 rds.encode = function(digest, buf, offset) {
-    if (!buf) buf = Buffer.allocUnsafe(rds.encodingLength(digest));
+    if (!buf) buf = Buffer1.allocUnsafe(rds.encodingLength(digest));
     if (!offset) offset = 0;
     const oldOffset = offset;
     const digestdata = digest.digest;
-    if (!Buffer.isBuffer(digestdata)) {
+    if (!Buffer1.isBuffer(digestdata)) {
         throw new Error("Digest must be a Buffer");
     }
     offset += 2;
@@ -4198,7 +4414,7 @@ rds.decode = function(buf, offset) {
 };
 rds.decode.bytes = 0;
 rds.encodingLength = function(digest) {
-    return 6 + Buffer.byteLength(digest.digest);
+    return 6 + Buffer1.byteLength(digest.digest);
 };
 const rhttpsvcb = {
 };
@@ -4232,7 +4448,7 @@ rhttpsvcb.decode = function(buf, offset) {
 };
 rhttpsvcb.decode.bytes = 0;
 rhttpsvcb.encode = function(data, buf, offset) {
-    if (!buf) buf = Buffer.allocUnsafe(rhttpsvcb.encodingLength(data));
+    if (!buf) buf = Buffer1.allocUnsafe(rhttpsvcb.encodingLength(data));
     if (!offset) offset = 0;
     const oldOffset = offset;
     offset += 2;
@@ -4285,12 +4501,12 @@ svcAlpn.decode = function(buf, offset) {
 };
 svcAlpn.decode.bytes = 0;
 svcAlpn.encode = function(data, buf, offset) {
-    if (!buf) buf = Buffer.allocUnsafe(svcAlpn.encodingLength(data));
+    if (!buf) buf = Buffer1.allocUnsafe(svcAlpn.encodingLength(data));
     if (!offset) offset = 0;
     const oldOffset = offset;
     offset += 2;
     for (let value of data){
-        buf.writeUInt8(Buffer.byteLength(value), offset);
+        buf.writeUInt8(Buffer1.byteLength(value), offset);
         offset += 1;
         offset += buf.write(value, offset);
     }
@@ -4302,7 +4518,7 @@ svcAlpn.encode.bytes = 0;
 svcAlpn.encodingLength = function(data) {
     var encLen = 2;
     for (let value of data){
-        encLen += 1 + Buffer.byteLength(value);
+        encLen += 1 + Buffer1.byteLength(value);
     }
     return encLen;
 };
@@ -4324,7 +4540,7 @@ svcIpv6.decode = function(buf, offset) {
 };
 svcIpv6.decode.bytes = 0;
 svcIpv6.encode = function(data, buf, offset) {
-    if (!buf) buf = Buffer.allocUnsafe(svcIpv6.encodingLength(data));
+    if (!buf) buf = Buffer1.allocUnsafe(svcIpv6.encodingLength(data));
     if (!offset) offset = 0;
     const oldOffset = offset;
     buf.writeUInt16BE(data.length * 16, offset);
@@ -4358,7 +4574,7 @@ svcIpv4.decode = function(buf, offset) {
 };
 svcIpv4.decode.bytes = 0;
 svcIpv4.encode = function(data, buf, offset) {
-    if (!buf) buf = Buffer.allocUnsafe(svcIpv4.encodingLength(data));
+    if (!buf) buf = Buffer1.allocUnsafe(svcIpv4.encodingLength(data));
     if (!offset) offset = 0;
     const oldOffset = offset;
     buf.writeUInt16BE(data.length * 4, offset);
@@ -4392,7 +4608,7 @@ svcMandatory.decode = function(buf, offset) {
 };
 svcMandatory.decode.bytes = 0;
 svcMandatory.encode = function(data, buf, offset) {
-    if (!buf) buf = Buffer.allocUnsafe(svcMandatory.encodingLength(data));
+    if (!buf) buf = Buffer1.allocUnsafe(svcMandatory.encodingLength(data));
     if (!offset) offset = 0;
     const oldOffset = offset;
     buf.writeUInt16BE(data.length * 2, offset);
@@ -4426,7 +4642,7 @@ svcPort.decode = function(buf, offset) {
 };
 svcPort.decode.bytes = 0;
 svcPort.encode = function(data, buf, offset) {
-    if (!buf) buf = Buffer.allocUnsafe(svcPort.encodingLength(data));
+    if (!buf) buf = Buffer1.allocUnsafe(svcPort.encodingLength(data));
     if (!offset) offset = 0;
     const oldOffset = offset;
     buf.writeUInt16BE(data.length * 2, offset);
@@ -4457,7 +4673,7 @@ svcEch.decode = function(buf, offset) {
 };
 svcEch.decode.bytes = 0;
 svcEch.encode = function(data, buf, offset) {
-    if (!buf) buf = Buffer.allocUnsafe(svcEch.encodingLength(data));
+    if (!buf) buf = Buffer1.allocUnsafe(svcEch.encodingLength(data));
     if (!offset) offset = 0;
     const oldOffset = offset;
     offset += 2;
@@ -4468,7 +4684,7 @@ svcEch.encode = function(data, buf, offset) {
 };
 svcEch.encode.bytes = 0;
 svcEch.encodingLength = function(data) {
-    return 2 + Buffer.from(data, "base64").byteLength;
+    return 2 + Buffer1.from(data, "base64").byteLength;
 };
 const svcOther = {
 };
@@ -4485,7 +4701,7 @@ svcOther.decode = function(buf, offset) {
 };
 svcOther.decode.bytes = 0;
 svcOther.encode = function(data, buf, offset) {
-    if (!buf) buf = Buffer.allocUnsafe(svcOther.encodingLength(data));
+    if (!buf) buf = Buffer1.allocUnsafe(svcOther.encodingLength(data));
     if (!offset) offset = 0;
     const oldOffset = offset;
     buf.writeUInt16BE(data.byteLength, offset);
@@ -4570,7 +4786,7 @@ const renc = function(type) {
 const answer = {
 };
 answer.encode = function(a, buf, offset) {
-    if (!buf) buf = Buffer.allocUnsafe(answer.encodingLength(a));
+    if (!buf) buf = Buffer1.allocUnsafe(answer.encodingLength(a));
     if (!offset) offset = 0;
     const oldOffset = offset;
     name1.encode(a.name, buf, offset);
@@ -4637,7 +4853,7 @@ answer.encodingLength = function(a) {
 const question = {
 };
 question.encode = function(q, buf, offset) {
-    if (!buf) buf = Buffer.allocUnsafe(question.encodingLength(q));
+    if (!buf) buf = Buffer1.allocUnsafe(question.encodingLength(q));
     if (!offset) offset = 0;
     const oldOffset = offset;
     name1.encode(q.name, buf, offset);
@@ -4671,7 +4887,7 @@ question.encodingLength = function(q) {
     return name1.encodingLength(q.name) + 4;
 };
 const encode2 = function(result, buf, offset) {
-    if (!buf) buf = Buffer.allocUnsafe(encodingLength(result));
+    if (!buf) buf = Buffer1.allocUnsafe(encodingLength(result));
     if (!offset) offset = 0;
     const oldOffset = offset;
     if (!result.questions) result.questions = [];
@@ -4706,9 +4922,9 @@ const encodingLength = function(result) {
 };
 const streamEncode = function(result) {
     const buf = encode2(result);
-    const sbuf = Buffer.allocUnsafe(2);
+    const sbuf = Buffer1.allocUnsafe(2);
     sbuf.writeUInt16BE(buf.byteLength);
-    const combine = Buffer.concat([
+    const combine = Buffer1.concat([
         sbuf,
         buf
     ]);
@@ -4748,430 +4964,579 @@ function decodeList(list, enc, buf, offset) {
 class DNSParserWrap {
     constructor(){
     }
-    Decode(arrayBuffer) {
+    decode(arrayBuffer) {
         try {
-            return decode2(Buffer.from(new Uint8Array(arrayBuffer)));
-        } catch (e1) {
+            return decode2(Buffer1.from(new Uint8Array(arrayBuffer)));
+        } catch (e5) {
             console.error("Error At : DNSParserWrap -> Decode");
-            throw e1;
+            throw e5;
         }
     }
-    Encode(DecodedDnsPacket) {
+    encode(DecodedDnsPacket) {
         try {
             return encode2(DecodedDnsPacket);
-        } catch (e2) {
-            console.error("Error At : DNSParserWrap -> Encode");
-            throw e2;
-        }
-    }
-}
-const minlives = 1;
-const maxlives = 2 ** 14;
-const mincap = 2 ** 5;
-const maxcap = 2 ** 32;
-const minslots = 2;
-class Clock {
-    constructor(cap, slotsperhand = 256, maxlife = 16){
-        cap = this.bound(cap, mincap, maxcap);
-        this.capacity = 2 ** Math.round(Math.log2(cap));
-        this.rb = new Array(this.capacity);
-        this.rb.fill(null);
-        this.store = new Map();
-        this.maxcount = this.bound(maxlife, minlives, maxlives);
-        this.totalhands = Math.max(minslots, Math.round(this.capacity / slotsperhand));
-        this.hands = new Array(this.totalhands);
-        for(let i24 = 0; i24 < this.totalhands; i24++)this.hands[i24] = i24;
-    }
-    next(i25) {
-        const n = i25 + this.totalhands;
-        return (this.capacity + n) % this.capacity;
-    }
-    cur(i26) {
-        return (this.capacity + i26) % this.capacity;
-    }
-    prev(i27) {
-        const p = i27 - this.totalhands;
-        return (this.capacity + p) % this.capacity;
-    }
-    bound(i28, min, max) {
-        i28 = i28 < min ? min : i28;
-        i28 = i28 > max ? max - 1 : i28;
-        return i28;
-    }
-    head(n) {
-        n = this.bound(n, 0, this.totalhands);
-        const h = this.hands[n];
-        return this.cur(h);
-    }
-    incrHead(n) {
-        n = this.bound(n, 0, this.totalhands);
-        this.hands[n] = this.next(this.hands[n]);
-        return this.hands[n];
-    }
-    decrHead(n) {
-        n = this.bound(n, 0, this.totalhands);
-        this.hands[n] = this.prev(this.hands[n]);
-        return this.hands[n];
-    }
-    get size() {
-        return this.store.size;
-    }
-    evict(n, c) {
-        logd("evict start, head/num/size", this.head(n), n, this.size);
-        const start = this.head(n);
-        let h = start;
-        do {
-            const entry = this.rb[h];
-            if (entry === null) return true;
-            entry.count -= c;
-            if (entry.count <= 0) {
-                logd("evict", h, entry);
-                this.store.delete(entry.key);
-                this.rb[h] = null;
-                return true;
-            }
-            h = this.incrHead(n);
-        }while (h !== start)
-        return false;
-    }
-    put(k, v, c = 1) {
-        const cached = this.store.get(k);
-        if (cached) {
-            cached.value = v;
-            const at = this.rb[cached.pos];
-            at.count = Math.min(at.count + c, this.maxcount);
-            return true;
-        }
-        const num = this.rolldice;
-        this.evict(num, c);
-        const h = this.head(num);
-        const hasSlot = this.rb[h] === null;
-        if (!hasSlot) return false;
-        const ringv = {
-            key: k,
-            count: Math.min(c, this.maxcount)
-        };
-        const storev = {
-            value: v,
-            pos: h
-        };
-        this.rb[h] = ringv;
-        this.store.set(k, storev);
-        this.incrHead(num);
-        return true;
-    }
-    val(k, c = 1) {
-        const r = this.store.get(k);
-        if (!r) return null;
-        const at = this.rb[r.pos];
-        at.count = Math.min(at.count + c, this.maxcount);
-        return r.value;
-    }
-    get rolldice() {
-        const max = this.totalhands;
-        return Math.floor(Math.random() * (max - 0)) + 0;
-    }
-}
-function logd() {
-}
-class LfuCache {
-    constructor(id, capacity){
-        this.id = id;
-        this.cache = new Clock(capacity);
-    }
-    Get(key) {
-        let val = false;
-        try {
-            val = this.cache.val(key) || false;
-        } catch (e3) {
-            console.log("Error: " + this.id + " -> Get");
-            console.log(e3.stack);
-        }
-        return val;
-    }
-    Put(key, val) {
-        try {
-            this.cache.put(key, val);
-        } catch (e4) {
-            console.log("Error: " + this.id + " -> Put");
-            console.log(e4.stack);
-        }
-    }
-}
-class LocalCache {
-    constructor(cacheName, size){
-        this.localCache = new LfuCache(cacheName, size);
-    }
-    Get(key) {
-        return this.localCache.Get(key);
-    }
-    Put(key, data) {
-        try {
-            this.localCache.Put(key, data);
-        } catch (e5) {
-            console.error("Error At : LocalCache -> Put");
-            console.error(e5.stack);
-        }
-    }
-}
-function fromBrowser(ua) {
-    return ua && ua.startsWith("Mozilla/5.0");
-}
-function jsonHeaders() {
-    return {
-        "Content-Type": "application/json"
-    };
-}
-function dnsHeaders() {
-    return {
-        "Accept": "application/dns-message",
-        "Content-Type": "application/dns-message"
-    };
-}
-function corsHeaders() {
-    return {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Headers": "*",
-        "Access-Control-Allow-Methods": "GET, POST, OPTIONS"
-    };
-}
-function browserHeaders() {
-    return Object.assign(jsonHeaders(), corsHeaders());
-}
-function contentLengthHeader(b) {
-    const len = !b || !b.byteLength ? "0" : b.byteLength.toString();
-    return {
-        "Content-Length": len
-    };
-}
-function concatHeaders() {
-    return Object.assign(...arguments);
-}
-function copyHeaders(request) {
-    const headers = {
-    };
-    if (!request || !request.headers) return headers;
-    request.headers.forEach((val, name)=>{
-        headers[name] = val;
-    });
-    return headers;
-}
-function arrayBufferOf(buf) {
-    if (!buf) return null;
-    const offset = buf.byteOffset;
-    const len = buf.byteLength;
-    return buf.buffer.slice(offset, offset + len);
-}
-function bufferOf(arrayBuf) {
-    if (!arrayBuf) return null;
-    return Buffer.from(new Uint8Array(arrayBuf));
-}
-function timeout(ms, callback) {
-    return setTimeout(callback, ms);
-}
-function uid() {
-    return (Math.random() + 1).toString(36).slice(1);
-}
-function safeBox(fn, defaultResponse = null) {
-    try {
-        return fn();
-    } catch (ignore) {
-    }
-    return defaultResponse;
-}
-function isDnsMsg(req) {
-    return req.headers.get("Accept") === "application/dns-message" || req.headers.get("Content-Type") === "application/dns-message";
-}
-function emptyResponse() {
-    return {
-        isException: false,
-        exceptionStack: "",
-        exceptionFrom: "",
-        data: {
-            responseDecodedDnsPacket: null,
-            responseBodyBuffer: null
-        }
-    };
-}
-function errResponse(id, err) {
-    return {
-        isException: true,
-        exceptionStack: err.stack,
-        exceptionFrom: id,
-        data: false
-    };
-}
-function emptyString(str) {
-    return !str || str.length === 0;
-}
-class DNSBlockOperation {
-    checkDomainBlocking(userBlocklistFlagUint, userServiceListUint, flagVersion, blocklistMap, blocklistFilter, domainName) {
-        let response;
-        try {
-            response = checkDomainNameUserFlagIntersection(userBlocklistFlagUint, flagVersion, blocklistMap, blocklistFilter, domainName);
-            if (response.isBlocked) {
-                return response;
-            }
-            if (userServiceListUint) {
-                let dnSplit = domainName.split(".");
-                let dnJoin = "";
-                let wildCardResponse;
-                while(dnSplit.shift() != undefined){
-                    dnJoin = dnSplit.join(".");
-                    wildCardResponse = checkDomainNameUserFlagIntersection(userServiceListUint, flagVersion, blocklistMap, blocklistFilter, dnJoin);
-                    if (wildCardResponse.isBlocked) {
-                        return wildCardResponse;
-                    }
-                }
-            }
         } catch (e6) {
+            console.error("Error At : DNSParserWrap -> Encode");
             throw e6;
+        }
+    }
+}
+const minDNSPacketSize = 12 + 5;
+const dns = new DNSParserWrap();
+function servfail(qid, qs) {
+    if (!qid || !qs) return null;
+    return encode3({
+        id: qid,
+        type: "response",
+        flags: 4098,
+        questions: qs
+    });
+}
+function requestTimeout() {
+    const t = workersTimeout(15000);
+    return t > 5000 ? Math.min(t, 30000) : 5000;
+}
+function truncated(ans) {
+    if (ans.length < 12) return false;
+    const flags = ans.readUInt16BE(2);
+    const tc = flags >> 9 & 1;
+    return tc === 1;
+}
+function validResponseSize(r) {
+    return r && validateSize(r.byteLength);
+}
+function validateSize(sz) {
+    return sz >= minDNSPacketSize && sz <= 4096;
+}
+function hasAnswers(packet) {
+    return packet && packet.answers && packet.answers.length > 0;
+}
+function hasSingleQuestion(packet) {
+    return packet && packet.questions && packet.questions.length === 1;
+}
+function rcodeNoError(packet) {
+    return packet && packet.rcode === "NOERROR";
+}
+function dnsqurl(dnsq) {
+    return btoa(String.fromCharCode(...new Uint8Array(dnsq))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+}
+function optAnswer(a) {
+    return a && a.type && a.type.toUpperCase() === "OPT";
+}
+function encode3(obj) {
+    return dns.encode(obj);
+}
+function decode3(buf) {
+    return dns.decode(buf);
+}
+function isBlockable(packet) {
+    return hasSingleQuestion(packet) && (packet.questions[0].type == "A" || packet.questions[0].type == "AAAA" || packet.questions[0].type == "CNAME" || packet.questions[0].type == "HTTPS" || packet.questions[0].type == "SVCB");
+}
+function cacheKey(packet) {
+    if (!hasSingleQuestion(packet)) return null;
+    const name = packet.questions[0].name.trim().toLowerCase();
+    const type = packet.questions[0].type;
+    return name + ":" + type;
+}
+function updateTtl(decodedDnsPacket, end) {
+    const now = Date.now();
+    const outttl = Math.max(Math.floor((end - now) / 1000), 30);
+    for (let a of decodedDnsPacket.answers){
+        if (!optAnswer(a)) a.ttl = outttl;
+    }
+}
+function updateQueryId(decodedDnsPacket, queryId) {
+    if (queryId === 0) return false;
+    if (queryId === decodedDnsPacket.id) return false;
+    decodedDnsPacket.id = queryId;
+    return true;
+}
+function isCname(packet) {
+    return hasAnswers(packet) && packet.answers[0].type == "CNAME";
+}
+function isHttps(packet) {
+    return hasAnswers(packet) && (packet.answers[0].type == "HTTPS" || packet.answers[0].type == "SVCB");
+}
+function getCname(answers) {
+    let li = [];
+    li[0] = answers[0].data.trim().toLowerCase();
+    li[1] = answers[answers.length - 1].name.trim().toLowerCase();
+    return li;
+}
+function getTargetName(answers) {
+    let tn = answers[0].data.targetName.trim().toLowerCase();
+    if (tn === ".") return false;
+    return tn;
+}
+function getQueryName(questions) {
+    let qn = questions[0].name.trim().toLowerCase();
+    if (qn === "") return false;
+    return qn;
+}
+class DNSQuestionBlock {
+    constructor(){
+    }
+    async RethinkModule(param) {
+        let response = {
+        };
+        response.isException = false;
+        response.exceptionStack = "";
+        response.exceptionFrom = "";
+        response.data = false;
+        try {
+            response.data = this.dnsBlock(param);
+        } catch (e7) {
+            response.isException = true;
+            response.exceptionStack = e7.stack;
+            response.exceptionFrom = "DNSQuestionBlock RethinkModule";
+            console.error("Error At : DNSQuestionBlock -> RethinkModule");
+            console.error(e7.stack);
         }
         return response;
     }
-}
-function checkDomainNameUserFlagIntersection(userBlocklistFlagUint, flagVersion, blocklistMap, blocklistFilter, domainName) {
-    let response = {
-    };
-    try {
-        response.isBlocked = false;
-        response.blockedB64Flag = "";
-        response.blockedTag = [];
-        if (blocklistMap.has(domainName)) {
-            let domainNameInBlocklistUint = blocklistMap.get(domainName);
-            let blockedUint = blocklistFilter.flagIntersection(userBlocklistFlagUint, domainNameInBlocklistUint);
-            if (blockedUint) {
-                response.isBlocked = true;
-                response.blockedB64Flag = blocklistFilter.getB64FlagFromUint16(blockedUint, flagVersion);
-            } else {
-                blockedUint = new Uint16Array(domainNameInBlocklistUint);
-                response.blockedB64Flag = blocklistFilter.getB64FlagFromUint16(blockedUint, flagVersion);
-            }
+    dnsBlock(param) {
+        let response = this.performBlocking(param.userBlocklistInfo, param.requestDecodedDnsPacket, param.blocklistFilter, false);
+        if (response && response.isBlocked) {
+            console.debug("add block response to cache");
+            putCache(param.dnsCache, param.request.url, param.blocklistFilter, param.requestDecodedDnsPacket, "", param.event);
         }
-    } catch (e7) {
-        throw e7;
+        return response;
+    }
+    performBlocking(blockInfo, dnsPacket, blf, cf) {
+        if (!blockInfo.userBlocklistFlagUint || blockInfo.userBlocklistFlagUint === "" || !isBlockable(dnsPacket)) {
+            return false;
+        }
+        const qn = getQueryName(dnsPacket.questions);
+        if (!qn) return false;
+        return doBlock(blf, blockInfo, qn, cf);
+    }
+}
+const quad1 = "1.1.1.2";
+class DNSResolver {
+    constructor(){
+        this.http2 = null;
+        this.nodeUtil = null;
+        this.transport = null;
+        this.dnsParser = new DNSParserWrap();
+    }
+    async lazyInit() {
+        if (isNode() && !this.http2) {
+            this.http2 = await import("http2");
+            this.nodeUtil = await import("../helpers/node/util.js");
+        }
+        if (isNode() && !this.transport) {
+            this.transport = new (await import("../helpers/node/dns-transport.js")).Transport(quad1, 53);
+        }
+    }
+    async RethinkModule(param) {
+        await this.lazyInit();
+        let response = emptyResponse();
+        try {
+            response.data = await this.resolveDns(param);
+        } catch (e8) {
+            response = errResponse("dnsResolver", e8);
+            log.e("Err DNSResolver -> RethinkModule", e8);
+        }
+        return response;
+    }
+    async resolveDns(param) {
+        let resp = {
+        };
+        const upRes = await this.resolveDnsUpstream(param.request, param.dnsResolverUrl, param.requestBodyBuffer);
+        resp = await decodeResponse(upRes, this.dnsParser);
+        return resp;
+    }
+}
+async function decodeResponse(response, dnsParser) {
+    if (!response) throw new Error("no upstream result");
+    if (!response.ok) {
+        log.d(JSON.stringify(response));
+        log.d("!OK", response.status, response.statusText, await response.text());
+        throw new Error(response.status + " http err: " + response.statusText);
+    }
+    let data = {
+    };
+    data.dnsBuffer = await response.arrayBuffer();
+    if (!validResponseSize(data.dnsBuffer)) {
+        throw new Error("Null / invalid response from upstream");
+    }
+    try {
+        data.dnsPacket = dnsParser.decode(data.dnsBuffer);
+    } catch (e9) {
+        log.e("decode fail " + response.status + " cache? " + data.dnsBuffer);
+        throw e9;
+    }
+    return data;
+}
+DNSResolver.prototype.resolveDnsUpstream = async function(request, resolverUrl, requestBodyBuffer) {
+    try {
+        if (this.transport) {
+            const q = bufferOf(requestBodyBuffer);
+            let ans = await this.transport.udpquery(q);
+            if (ans && truncated(ans)) {
+                log.w("ans truncated, retrying over tcp");
+                ans = await this.transport.tcpquery(q);
+            }
+            return ans ? new Response(arrayBufferOf(ans)) : new Response(null, {
+                status: 503
+            });
+        }
+        let u = new URL(request.url);
+        let dnsResolverUrl = new URL(resolverUrl);
+        u.hostname = dnsResolverUrl.hostname;
+        u.pathname = dnsResolverUrl.pathname;
+        u.port = dnsResolverUrl.port;
+        u.protocol = dnsResolverUrl.protocol;
+        let newRequest = null;
+        if (request.method === "GET" || isWorkers() && request.method === "POST") {
+            u.search = "?dns=" + dnsqurl(requestBodyBuffer);
+            newRequest = new Request(u.href, {
+                method: "GET"
+            });
+        } else if (request.method === "POST") {
+            newRequest = new Request(u.href, {
+                method: "POST",
+                headers: concatHeaders(contentLengthHeader(requestBodyBuffer), dnsHeaders()),
+                body: requestBodyBuffer
+            });
+        } else {
+            throw new Error("get/post requests only");
+        }
+        return this.http2 ? this.doh2(newRequest) : fetch(newRequest);
+    } catch (e10) {
+        throw e10;
+    }
+};
+DNSResolver.prototype.doh2 = async function(request) {
+    console.debug("upstream using h2");
+    const http2 = this.http2;
+    const transformPseudoHeaders = this.nodeUtil.transformPseudoHeaders;
+    const u = new URL(request.url);
+    const reqB = bufferOf(await request.arrayBuffer());
+    const headers1 = copyHeaders(request);
+    return new Promise((resolve, reject)=>{
+        const authority = u.origin;
+        const c = http2.connect(authority);
+        c.on("error", (err)=>{
+            reject(err.message);
+        });
+        const req = c.request({
+            [http2.constants.HTTP2_HEADER_METHOD]: request.method,
+            [http2.constants.HTTP2_HEADER_PATH]: `${u.pathname}`,
+            ...headers1
+        });
+        req.on("response", (headers)=>{
+            const resBuffers = [];
+            const resH = transformPseudoHeaders(headers);
+            req.on("data", (chunk)=>{
+                resBuffers.push(chunk);
+            });
+            req.on("end", ()=>{
+                const resB = Buffer1.concat(resBuffers);
+                c.close();
+                resolve(new Response(resB, resH));
+            });
+            req.on("error", (err)=>{
+                reject(err.message);
+            });
+        });
+        req.end(reqB);
+    });
+};
+class DNSResponseBlock {
+    constructor(){
+    }
+    async RethinkModule(param) {
+        let response = {
+        };
+        response.isException = false;
+        response.exceptionStack = "";
+        response.exceptionFrom = "";
+        response.data = false;
+        try {
+            response.data = this.performBlocking(param.userBlocklistInfo, param.responseDecodedDnsPacket, param.blocklistFilter, false);
+            putCache1(param.dnsCache, param.request.url, param.blocklistFilter, param.responseDecodedDnsPacket, param.responseBodyBuffer, param.event);
+        } catch (e11) {
+            response.isException = true;
+            response.exceptionStack = e11.stack;
+            response.exceptionFrom = "DNSResponseBlock RethinkModule";
+            console.error("Error At : DNSResponseBlock -> RethinkModule");
+            console.error(e11.stack);
+        }
+        return response;
+    }
+    performBlocking(blockInfo, dnsPacket, blf, cf) {
+        if (!blockInfo.userBlocklistFlagUint || blockInfo.userBlocklistFlagUint === "") {
+            return false;
+        }
+        if (isCname(dnsPacket)) {
+            return doCnameBlock(dnsPacket, blf, blockInfo, cf);
+        }
+        if (isHttps(dnsPacket)) {
+            return doHttpsBlock(dnsPacket, blf, blockInfo, cf);
+        }
+        return false;
+    }
+}
+class DNSCacheResponse {
+    constructor(){
+    }
+    async RethinkModule(param) {
+        let response = {
+        };
+        response.isException = false;
+        response.exceptionStack = "";
+        response.exceptionFrom = "";
+        response.data = {
+        };
+        try {
+            if (!param.isDnsMsg) {
+                return response;
+            }
+            response.data = await this.resolveFromCache(param);
+        } catch (e12) {
+            response.isException = true;
+            response.exceptionStack = e12.stack;
+            response.exceptionFrom = "DNSAggCache RethinkModule";
+            console.error("Error At : DNSAggCache -> RethinkModule");
+            console.error(e12.stack);
+        }
+        return response;
+    }
+    async resolveFromCache(param) {
+        const key = cacheKey(param.requestDecodedDnsPacket);
+        if (!key) return false;
+        let cacheResponse = await param.dnsCache.get(key, param.request.url);
+        console.debug("cache key : ", key);
+        console.debug("Cache Response", JSON.stringify(cacheResponse));
+        if (!cacheResponse) return false;
+        return await parseCacheResponse(cacheResponse, param.userBlocklistInfo, param.requestDecodedDnsPacket, param.dnsQuestionBlock, param.dnsResponseBlock);
+    }
+}
+const ttlGraceSec = 30;
+function generateQuestionFilter(cf, blf, dnsPacket) {
+    const q = dnsPacket.questions[0].name;
+    cf[q] = objOf(blf.getDomainInfo(q).searchResult);
+}
+function generateAnswerFilter(cf, blf, dnsPacket) {
+    let li;
+    if (isCname(dnsPacket)) {
+        li = getCname(dnsPacket.answers);
+        addCacheFilter(cf, blf, li);
+        return;
+    }
+    if (isHttps(dnsPacket)) {
+        li = getTargetName(dnsPacket);
+        addCacheFilter(cf, blf, li);
+    }
+}
+function addCacheFilter(cf, blf, li) {
+    for (let name of li){
+        cf[name] = objOf(blf.getDomainInfo(name).searchResult);
+    }
+}
+function isCacheable(dnsPacket) {
+    if (!rcodeNoError(dnsPacket)) return false;
+    if (!hasAnswers(dnsPacket)) return false;
+    return true;
+}
+function determineCacheExpiry(dnsPacket) {
+    if (!hasAnswers(dnsPacket)) return 0;
+    let minttl = 1 << 30;
+    for (let a of dnsPacket.answers){
+        minttl = Math.min(a.ttl || minttl, minttl);
+    }
+    if (minttl === 1 << 30) return 0;
+    minttl = Math.max(minttl + ttlGraceSec, ttlGraceSec);
+    const expiry = Date.now() + minttl * 1000;
+    return expiry;
+}
+function cacheMetadata(dnsPacket, ttlEndTime, blf, bodyUsed) {
+    let cf = {
+    };
+    generateAnswerFilter(cf, blf, dnsPacket);
+    generateQuestionFilter(cf, blf, dnsPacket);
+    return {
+        ttlEndTime: ttlEndTime,
+        bodyUsed: bodyUsed,
+        cacheFilter: cf
+    };
+}
+function createCacheInput(dnsPacket, blf, bodyUsed) {
+    const ttlEndTime = determineCacheExpiry(dnsPacket);
+    let cacheInput = {
+    };
+    cacheInput.metaData = cacheMetadata(dnsPacket, ttlEndTime, blf, bodyUsed);
+    cacheInput.dnsPacket = dnsPacket;
+    return cacheInput;
+}
+function putCache(cache, url, blf, dnsPacket, buf, event) {
+    const key = cacheKey(dnsPacket);
+    if (!key) return;
+    let input = createCacheInput(dnsPacket, blf, false);
+    event.waitUntil(cache.put(key, input, url, buf));
+}
+function doHttpsBlock(dnsPacket, blf, blockInfo, cf) {
+    console.debug("At Https-Svcb dns Block");
+    let tn = getTargetName(dnsPacket.answers);
+    if (!tn) return false;
+    return doBlock(blf, blockInfo, tn, cf);
+}
+function doCnameBlock(dnsPacket, blf, blockInfo, cf) {
+    console.debug("At Cname dns Block");
+    let cn = getCname(dnsPacket.answers);
+    let response = false;
+    for (let n of cn){
+        response = doBlock(blf, blockInfo, n, cf);
+        if (response.isBlocked) break;
     }
     return response;
 }
-class DNSBlock {
-    constructor(){
-        this.dnsParser = new DNSParserWrap();
-        this.dnsBlockOperation = new DNSBlockOperation();
-        this.wCache = null;
-    }
-    async RethinkModule(param) {
-        let response = {
-        };
-        response.isException = false;
-        response.exceptionStack = "";
-        response.exceptionFrom = "";
-        response.data = {
-        };
-        response.data.isBlocked = false;
-        response.data.blockedB64Flag = "";
-        try {
-            if (hasBlocklistStamp(param)) {
-                let domainNameBlocklistInfo;
-                if (param.requestDecodedDnsPacket.questions.length >= 1 && (param.requestDecodedDnsPacket.questions[0].type == "A" || param.requestDecodedDnsPacket.questions[0].type == "AAAA" || param.requestDecodedDnsPacket.questions[0].type == "CNAME" || param.requestDecodedDnsPacket.questions[0].type == "HTTPS" || param.requestDecodedDnsPacket.questions[0].type == "SVCB")) {
-                    domainNameBlocklistInfo = param.blocklistFilter.getDomainInfo(param.requestDecodedDnsPacket.questions[0].name);
-                    if (domainNameBlocklistInfo.searchResult) {
-                        response.data = this.dnsBlockOperation.checkDomainBlocking(param.userBlocklistInfo.userBlocklistFlagUint, param.userBlocklistInfo.userServiceListUint, param.userBlocklistInfo.flagVersion, domainNameBlocklistInfo.searchResult, param.blocklistFilter, param.requestDecodedDnsPacket.questions[0].name);
-                        if (response.data.isBlocked && param.isAggCacheReq) {
-                            if (this.wCache === null) {
-                                this.wCache = caches.default;
-                            }
-                            toCacheApi(param, this.wCache, domainNameBlocklistInfo);
-                        }
-                    }
-                }
-            }
-        } catch (e8) {
-            response.isException = true;
-            response.exceptionStack = e8.stack;
-            response.exceptionFrom = "DNSBlock RethinkModule";
-            console.error("Error At : DNSBlock -> RethinkModule");
-            console.error(e8.stack);
-        }
+function putCache1(cache, url, blf, dnsPacket, buf, event) {
+    if (!isCacheable(dnsPacket)) return;
+    const key = cacheKey(dnsPacket);
+    if (!key) return;
+    let input = createCacheInput(dnsPacket, blf, true);
+    console.debug("Cache Input ", JSON.stringify(input));
+    event.waitUntil(cache.put(key, input, url, buf));
+}
+async function parseCacheResponse(cr, blockInfo, reqDnsPacket, qb, rb) {
+    let response = checkDnsBlock(qb, reqDnsPacket, cr.metaData.cacheFilter, blockInfo);
+    console.debug("question block ", JSON.stringify(response));
+    if (response && response.isBlocked) {
         return response;
     }
-}
-function hasBlocklistStamp(param) {
-    return param && param.userBlocklistInfo && !emptyString(param.userBlocklistInfo.userBlocklistFlagUint);
-}
-function toCacheApi(param, wCache, domainNameBlocklistInfo) {
-    const dn = param.requestDecodedDnsPacket.questions[0].name.trim().toLowerCase() + ":" + param.requestDecodedDnsPacket.questions[0].type;
-    let wCacheUrl = new URL(new URL(param.request.url).origin + "/" + dn);
-    let response = new Response("", {
-        headers: {
-            "x-rethink-metadata": JSON.stringify({
-                ttlEndTime: 0,
-                bodyUsed: false,
-                blocklistInfo: Object.fromEntries(domainNameBlocklistInfo.searchResult)
-            })
-        },
-        cf: {
-            cacheTtl: 604800
-        }
-    });
-    param.event.waitUntil(wCache.put(wCacheUrl, response));
-}
-class DNSResponseBlock {
-    constructor(){
-        this.dnsBlockOperation = new DNSBlockOperation();
+    const now = Date.now();
+    if (!cr.metaData.bodyUsed || now > cr.metaData.ttlEndTime) {
+        return false;
     }
-    async RethinkModule(param) {
-        let response = {
-        };
-        response.isException = false;
-        response.exceptionStack = "";
-        response.exceptionFrom = "";
-        response.data = {
-        };
-        response.data.isBlocked = false;
-        response.data.blockedB64Flag = "";
-        try {
-            if (hasBlocklistStamp1(param)) {
-                if (param.responseDecodedDnsPacket.answers.length > 0 && param.responseDecodedDnsPacket.answers[0].type == "CNAME") {
-                    checkCnameBlock(param, response, this.dnsBlockOperation);
-                } else if (param.responseDecodedDnsPacket.answers.length > 0 && (param.responseDecodedDnsPacket.answers[0].type == "HTTPS" || param.responseDecodedDnsPacket.answers[0].type == "SVCB")) {
-                    checkHttpsSvcbBlock(param, response, this.dnsBlockOperation);
-                }
-            }
-        } catch (e9) {
-            response.isException = true;
-            response.exceptionStack = e9.stack;
-            response.exceptionFrom = "DNSResponseBlock RethinkModule";
-            console.error("Error At : DNSResponseBlock -> RethinkModule");
-            console.error(e9.stack);
-        }
+    response = checkDnsBlock(rb, cr.dnsPacket, cr.metaData.cacheFilter, blockInfo);
+    console.debug("answer block ", JSON.stringify(response));
+    if (response && response.isBlocked) {
         return response;
     }
+    response = generateResponse(cr, reqDnsPacket.id);
+    return response;
 }
-function checkHttpsSvcbBlock(param, response, dnsBlockOperation) {
-    let targetName = param.responseDecodedDnsPacket.answers[0].data.targetName.trim().toLowerCase();
-    if (targetName != ".") {
-        let domainNameBlocklistInfo = param.blocklistFilter.getDomainInfo(targetName);
-        if (domainNameBlocklistInfo.searchResult) {
-            response.data = dnsBlockOperation.checkDomainBlocking(param.userBlocklistInfo.userBlocklistFlagUint, param.userBlocklistInfo.userServiceListUint, param.userBlocklistInfo.flagVersion, domainNameBlocklistInfo.searchResult, param.blocklistFilter, targetName);
+function checkDnsBlock(qb, dnsPacket, cf, blockInfo) {
+    return qb.performBlocking(blockInfo, dnsPacket, false, cf);
+}
+function generateResponse(cr, qid) {
+    let response = {
+    };
+    response.dnsPacket = cr.dnsPacket;
+    updateQueryId(response.dnsPacket, qid);
+    updateTtl(response.dnsPacket, cr.metaData.ttlEndTime);
+    response.dnsBuffer = encode3(response.dnsPacket);
+    return response;
+}
+class CurrentRequest {
+    constructor(){
+        this.blockedB64Flag = "";
+        this.decodedDnsPacket = this.emptyDecodedDnsPacket();
+        this.httpResponse = undefined;
+        this.isException = false;
+        this.exceptionStack = undefined;
+        this.exceptionFrom = "";
+        this.isDnsParseException = false;
+        this.isDnsBlock = false;
+        this.isInvalidFlagBlock = false;
+        this.stopProcessing = false;
+    }
+    emptyDecodedDnsPacket() {
+        return {
+            id: 0,
+            questions: null
+        };
+    }
+    initDecodedDnsPacketIfNeeded() {
+        if (!this.decodedDnsPacket) {
+            this.decodedDnsPacket = this.emptyDecodedDnsPacket();
         }
     }
-}
-function checkCnameBlock(param, response, dnsBlockOperation) {
-    let cname = param.responseDecodedDnsPacket.answers[0].data.trim().toLowerCase();
-    let domainNameBlocklistInfo = param.blocklistFilter.getDomainInfo(cname);
-    if (domainNameBlocklistInfo.searchResult) {
-        response.data = dnsBlockOperation.checkDomainBlocking(param.userBlocklistInfo.userBlocklistFlagUint, param.userBlocklistInfo.userServiceListUint, param.userBlocklistInfo.flagVersion, domainNameBlocklistInfo.searchResult, param.blocklistFilter, cname);
+    dnsExceptionResponse() {
+        this.initDecodedDnsPacketIfNeeded();
+        const qid = this.decodedDnsPacket.id;
+        const questions = this.decodedDnsPacket.questions;
+        const ex = {
+            exceptionFrom: this.exceptionFrom,
+            exceptionStack: this.exceptionStack
+        };
+        const servfail2 = servfail(qid, questions);
+        this.httpResponse = new Response(servfail2, {
+            headers: concatHeaders(this.headers(), this.additionalHeader(JSON.stringify(ex))),
+            status: servfail2 ? 200 : 500
+        });
     }
-    if (!response.data.isBlocked) {
-        cname = param.responseDecodedDnsPacket.answers[param.responseDecodedDnsPacket.answers.length - 1].name.trim().toLowerCase();
-        domainNameBlocklistInfo = param.blocklistFilter.getDomainInfo(cname);
-        if (domainNameBlocklistInfo.searchResult) {
-            response.data = dnsBlockOperation.checkDomainBlocking(param.userBlocklistInfo.userBlocklistFlagUint, param.userBlocklistInfo.userServiceListUint, param.userBlocklistInfo.flagVersion, domainNameBlocklistInfo.searchResult, param.blocklistFilter, cname);
+    customResponse(x) {
+        this.httpResponse = new Response(null, {
+            headers: concatHeaders(this.headers(), this.additionalHeader(JSON.stringify(x)))
+        });
+    }
+    dnsResponse(arrayBuffer) {
+        this.httpResponse = new Response(arrayBuffer, {
+            headers: this.headers()
+        });
+    }
+    dnsBlockResponse() {
+        this.initDecodedDnsPacketIfNeeded();
+        try {
+            this.decodedDnsPacket.type = "response";
+            this.decodedDnsPacket.rcode = "NOERROR";
+            this.decodedDnsPacket.flags = 384;
+            this.decodedDnsPacket.flag_qr = true;
+            this.decodedDnsPacket.answers = [];
+            this.decodedDnsPacket.answers[0] = {
+            };
+            this.decodedDnsPacket.answers[0].name = this.decodedDnsPacket.questions[0].name;
+            this.decodedDnsPacket.answers[0].type = this.decodedDnsPacket.questions[0].type;
+            this.decodedDnsPacket.answers[0].ttl = 300;
+            this.decodedDnsPacket.answers[0].class = "IN";
+            this.decodedDnsPacket.answers[0].data = "";
+            this.decodedDnsPacket.answers[0].flush = false;
+            if (this.decodedDnsPacket.questions[0].type == "A") {
+                this.decodedDnsPacket.answers[0].data = "0.0.0.0";
+            } else if (this.decodedDnsPacket.questions[0].type == "AAAA") {
+                this.decodedDnsPacket.answers[0].data = "::";
+            } else if (this.decodedDnsPacket.questions[0].type == "HTTPS" || this.decodedDnsPacket.questions[0].type == "SVCB") {
+                this.decodedDnsPacket.answers[0].data = {
+                };
+                this.decodedDnsPacket.answers[0].data.svcPriority = 0;
+                this.decodedDnsPacket.answers[0].data.targetName = ".";
+                this.decodedDnsPacket.answers[0].data.svcParams = {
+                };
+            }
+            this.decodedDnsPacket.authorities = [];
+            this.httpResponse = new Response(encode3(this.decodedDnsPacket), {
+                headers: this.headers()
+            });
+        } catch (e13) {
+            log.e(JSON.stringify(this.decodedDnsPacket));
+            this.isException = true;
+            this.exceptionStack = e13.stack;
+            this.exceptionFrom = "CurrentRequest dnsBlockResponse";
         }
     }
-}
-function hasBlocklistStamp1(param) {
-    return param && param.userBlocklistInfo && !emptyString(param.userBlocklistInfo.userBlocklistFlagUint);
+    headers() {
+        const xNileFlags = this.isDnsBlock ? {
+            "x-nile-flags": this.blockedB64Flag
+        } : null;
+        const xNileFlagsAllowed = this.blockedB64Flag ? {
+            "x-nile-flags-allowed": this.blockedB64Flag
+        } : null;
+        return concatHeaders(dnsHeaders(), xNileFlags, xNileFlagsAllowed);
+    }
+    additionalHeader(json) {
+        if (!json) return null;
+        return {
+            "x-nile-add": json
+        };
+    }
+    setCorsHeaders() {
+        for (const [name, value] of Object.entries(corsHeaders())){
+            this.httpResponse.headers.set(name, value);
+        }
+    }
 }
 const BASE64 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_";
 const config1 = {
@@ -5299,11 +5664,11 @@ BitString.prototype = {
         return this.bytes;
     },
     encode: function(n) {
-        const e10 = [];
+        const e14 = [];
         for(let i3 = 0; i3 < this.length; i3 += n){
-            e10.push(this.get(i3, Math.min(this.length, n)));
+            e14.push(this.get(i3, Math.min(this.length, n)));
         }
-        return e10;
+        return e14;
     },
     get: function(p, n, debug = false) {
         if (p % W + n <= W) {
@@ -5794,9 +6159,269 @@ function createBlocklistFilter(tdbuf, rdbuf, blocklistFileTag, blocklistBasicCon
             t: tags,
             ft: frozentrie
         };
-    } catch (e11) {
-        throw e11;
+    } catch (e15) {
+        throw e15;
     }
+}
+const minlives = 1;
+const maxlives = 2 ** 14;
+const mincap = 2 ** 5;
+const maxcap = 2 ** 32;
+const minslots = 2;
+class Clock {
+    constructor(cap, slotsperhand = 256, maxlife = 16){
+        cap = this.bound(cap, mincap, maxcap);
+        this.capacity = 2 ** Math.round(Math.log2(cap));
+        this.rb = new Array(this.capacity);
+        this.rb.fill(null);
+        this.store = new Map();
+        this.maxcount = this.bound(maxlife, minlives, maxlives);
+        this.totalhands = Math.max(minslots, Math.round(this.capacity / slotsperhand));
+        this.hands = new Array(this.totalhands);
+        for(let i24 = 0; i24 < this.totalhands; i24++)this.hands[i24] = i24;
+    }
+    next(i25) {
+        const n = i25 + this.totalhands;
+        return (this.capacity + n) % this.capacity;
+    }
+    cur(i26) {
+        return (this.capacity + i26) % this.capacity;
+    }
+    prev(i27) {
+        const p = i27 - this.totalhands;
+        return (this.capacity + p) % this.capacity;
+    }
+    bound(i28, min, max) {
+        i28 = i28 < min ? min : i28;
+        i28 = i28 > max ? max - 1 : i28;
+        return i28;
+    }
+    head(n) {
+        n = this.bound(n, 0, this.totalhands);
+        const h = this.hands[n];
+        return this.cur(h);
+    }
+    incrHead(n) {
+        n = this.bound(n, 0, this.totalhands);
+        this.hands[n] = this.next(this.hands[n]);
+        return this.hands[n];
+    }
+    decrHead(n) {
+        n = this.bound(n, 0, this.totalhands);
+        this.hands[n] = this.prev(this.hands[n]);
+        return this.hands[n];
+    }
+    get size() {
+        return this.store.size;
+    }
+    evict(n, c) {
+        logd("evict start, head/num/size", this.head(n), n, this.size);
+        const start = this.head(n);
+        let h = start;
+        do {
+            const entry = this.rb[h];
+            if (entry === null) return true;
+            entry.count -= c;
+            if (entry.count <= 0) {
+                logd("evict", h, entry);
+                this.store.delete(entry.key);
+                this.rb[h] = null;
+                return true;
+            }
+            h = this.incrHead(n);
+        }while (h !== start)
+        return false;
+    }
+    put(k, v, c = 1) {
+        const cached = this.store.get(k);
+        if (cached) {
+            cached.value = v;
+            const at = this.rb[cached.pos];
+            at.count = Math.min(at.count + c, this.maxcount);
+            return true;
+        }
+        const num = this.rolldice;
+        this.evict(num, c);
+        const h = this.head(num);
+        const hasSlot = this.rb[h] === null;
+        if (!hasSlot) return false;
+        const ringv = {
+            key: k,
+            count: Math.min(c, this.maxcount)
+        };
+        const storev = {
+            value: v,
+            pos: h
+        };
+        this.rb[h] = ringv;
+        this.store.set(k, storev);
+        this.incrHead(num);
+        return true;
+    }
+    val(k, c = 1) {
+        const r = this.store.get(k);
+        if (!r) return null;
+        const at = this.rb[r.pos];
+        at.count = Math.min(at.count + c, this.maxcount);
+        return r.value;
+    }
+    get rolldice() {
+        const max = this.totalhands;
+        return Math.floor(Math.random() * (max - 0)) + 0;
+    }
+}
+function logd() {
+}
+class LfuCache {
+    constructor(id, capacity){
+        this.id = id;
+        this.cache = new Clock(capacity);
+    }
+    Get(key) {
+        let val = false;
+        try {
+            val = this.cache.val(key) || false;
+        } catch (e16) {
+            console.log("Error: " + this.id + " -> Get");
+            console.log(e16.stack);
+        }
+        return val;
+    }
+    Put(key, val) {
+        try {
+            this.cache.put(key, val);
+        } catch (e17) {
+            console.log("Error: " + this.id + " -> Put");
+            console.log(e17.stack);
+        }
+    }
+}
+class UserCache {
+    constructor(size){
+        this.localCache = new LfuCache("UserCache", size);
+    }
+    get(key) {
+        return this.localCache.Get(key);
+    }
+    put(key, data) {
+        try {
+            this.localCache.Put(key, data);
+        } catch (e18) {
+            console.error("Error At : UserCache -> Put");
+            console.error(e18.stack);
+        }
+    }
+}
+class DomainNameCache {
+    constructor(size){
+        this.localCache = new LfuCache("DomainNameCache", size);
+    }
+    get(key) {
+        return this.localCache.Get(key);
+    }
+    put(key, data) {
+        try {
+            this.localCache.Put(key, data);
+        } catch (e19) {
+            console.error("Error At : LocalCache -> Put");
+            console.error(e19.stack);
+        }
+    }
+}
+class CacheApi {
+    async get(url) {
+        if (isWorkers()) {
+            return await caches.default.match(url);
+        }
+        return false;
+    }
+    put(url, response) {
+        if (isWorkers()) {
+            return caches.default.put(url, response);
+        }
+        return false;
+    }
+}
+class DnsCache {
+    constructor(size){
+        this.localCache = new LfuCache("DnsCache", size);
+        this.cacheApi = new CacheApi();
+    }
+    async get(key, url) {
+        let entry = this.getLocalCache(key);
+        if (entry && entry.metaData && (!entry.metaData.bodyUsed || Date.now() <= entry.metaData.ttlEndTime)) {
+            return entry;
+        }
+        if (!url || !isWorkers()) return false;
+        const cacheApiKey = makeCacheApiKey(key, url);
+        entry = await parseCacheApiResponse(await this.getCacheApi(cacheApiKey));
+        if (!entry) return false;
+        this.putLocalCache(key, entry);
+        return entry;
+    }
+    async put(key, data, url, buf) {
+        try {
+            this.putLocalCache(key, data);
+            if (url && isWorkers()) {
+                console.debug("Adding to cache api");
+                this.putCacheApi(key, url, buf, data.metaData);
+            }
+        } catch (e20) {
+            console.error(e20.stack);
+        }
+    }
+    putLocalCache(key, data) {
+        try {
+            console.debug("Adding to local cache");
+            this.localCache.Put(key, data);
+        } catch (e21) {
+            console.error("Error At : DnsCache -> put");
+            console.error(e21.stack);
+        }
+    }
+    getLocalCache(key) {
+        return this.localCache.Get(key);
+    }
+    async getCacheApi(key) {
+        return await this.cacheApi.get(key);
+    }
+    putCacheApi(key, url, buf, metaData) {
+        let response = createResponse(buf, metaData, 604800);
+        const cacheApiKey = makeCacheApiKey(key, url);
+        this.cacheApi.put(cacheApiKey, response);
+    }
+}
+function createResponse(buf, metaData, ttl) {
+    return new Response(buf, httpHeaders(buf, metaData, ttl));
+}
+async function parseCacheApiResponse(response) {
+    if (!response) return false;
+    console.debug("Response found in Cache api");
+    const metaData = JSON.parse(response.headers.get("x-rethink-metadata"));
+    console.debug(metaData);
+    if (!metaData || metaData.bodyUsed && Date.now() >= metaData.ttlEndTime) {
+        return false;
+    }
+    let data = {
+    };
+    data.dnsPacket = metaData.bodyUsed ? decode3(await response.arrayBuffer()) : {
+    };
+    data.metaData = metaData;
+    console.debug(JSON.stringify(data));
+    return data;
+}
+function makeCacheApiKey(key, url) {
+    return new URL(new URL(url).origin + "/" + env.latestTimestamp + "/" + key);
+}
+function httpHeaders(buf, metaData, ttl) {
+    return {
+        headers: concatHeaders({
+            "x-rethink-metadata": JSON.stringify(metaData)
+        }, contentLengthHeader(buf)),
+        cf: concatHeaders({
+            cacheTtl: ttl
+        })
+    };
 }
 const ALPHA32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 function readChar(chr) {
@@ -5847,16 +6472,16 @@ class BlocklistFilter {
         this.ft = ft;
         this.blocklistBasicConfig = blocklistBasicConfig;
         this.blocklistFileTag = blocklistFileTag;
-        this.domainNameCache = new LocalCache("Domain-Name-Cache", 5000);
+        this.domainNameCache = new DomainNameCache(20000);
     }
     getDomainInfo(domainName) {
         domainName = domainName.trim().toLowerCase();
-        let domainNameInfo = this.domainNameCache.Get(domainName);
+        let domainNameInfo = this.domainNameCache.get(domainName);
         if (!domainNameInfo) {
             domainNameInfo = {
             };
             domainNameInfo.searchResult = this.hadDomainName(domainName);
-            this.domainNameCache.Put(domainName, domainNameInfo);
+            this.domainNameCache.put(domainName, domainNameInfo);
         }
         return domainNameInfo;
     }
@@ -5870,84 +6495,20 @@ class BlocklistFilter {
     unstamp(flag) {
         return toUint(flag);
     }
-    flagIntersection(flag1, flag2) {
-        if (emptyString(flag1) || emptyString(flag2)) return false;
-        try {
-            let flag1Header = flag1[0];
-            let flag2Header = flag2[0];
-            let intersectHeader = flag1Header & flag2Header;
-            if (intersectHeader == 0) {
-                return false;
-            }
-            let flag1Length = flag1.length - 1;
-            let flag2Length = flag2.length - 1;
-            const intersectBody = [];
-            let tmpInterectHeader = intersectHeader;
-            let maskHeaderForBodyEmpty = 1;
-            let tmpBodyIntersect;
-            for(; tmpInterectHeader != 0;){
-                if ((flag1Header & 1) == 1) {
-                    if ((tmpInterectHeader & 1) == 1) {
-                        tmpBodyIntersect = flag1[flag1Length] & flag2[flag2Length];
-                        if (tmpBodyIntersect == 0) {
-                            intersectHeader = intersectHeader ^ maskHeaderForBodyEmpty;
-                        } else {
-                            intersectBody.push(tmpBodyIntersect);
-                        }
-                    }
-                    flag1Length = flag1Length - 1;
-                }
-                if ((flag2Header & 1) == 1) {
-                    flag2Length = flag2Length - 1;
-                }
-                flag1Header = flag1Header >>> 1;
-                tmpInterectHeader = tmpInterectHeader >>> 1;
-                flag2Header = flag2Header >>> 1;
-                maskHeaderForBodyEmpty = maskHeaderForBodyEmpty * 2;
-            }
-            if (intersectHeader == 0) {
-                return false;
-            }
-            const intersectFlag = new Uint16Array(intersectBody.length + 1);
-            let count = 0;
-            intersectFlag[count++] = intersectHeader;
-            let bodyData;
-            while((bodyData = intersectBody.pop()) != undefined){
-                intersectFlag[count++] = bodyData;
-            }
-            return intersectFlag;
-        } catch (e12) {
-            throw e12;
-        }
-    }
     customTagToFlag(tagList) {
         return customTagToFlag(tagList, this.blocklistFileTag);
     }
     getB64FlagFromTag(tagList, flagVersion) {
         try {
             if (flagVersion == "0") {
-                return encodeURIComponent(Buffer.from(customTagToFlag(tagList, this.blocklistFileTag)).toString("base64"));
+                return encodeURIComponent(Buffer1.from(customTagToFlag(tagList, this.blocklistFileTag)).toString("base64"));
             } else if (flagVersion == "1") {
                 return "1:" + encodeURI(btoa(encodeToBinary(customTagToFlag(tagList, this.blocklistFileTag))).replace(/\//g, "_").replace(/\+/g, "-"));
             }
-        } catch (e13) {
-            throw e13;
+        } catch (e22) {
+            throw e22;
         }
     }
-    getB64FlagFromUint16(arr, flagVersion) {
-        try {
-            if (flagVersion == "0") {
-                return encodeURIComponent(Buffer.from(arr).toString("base64"));
-            } else if (flagVersion == "1") {
-                return "1:" + encodeURI(btoa(encodeUint16arrToBinary(arr)).replace(/\//g, "_").replace(/\+/g, "-"));
-            }
-        } catch (e14) {
-            throw e14;
-        }
-    }
-}
-function encodeUint16arrToBinary(uint16Arr) {
-    return String.fromCharCode(...new Uint8Array(uint16Arr.buffer));
 }
 function encodeToBinary(s) {
     const codeUnits = new Uint16Array(s.length);
@@ -5993,12 +6554,12 @@ function toUint(flag) {
         response.flagVersion = v;
         response.userBlocklistFlagUint = convertor(f) || "";
         return response;
-    } catch (e15) {
-        throw e15;
+    } catch (e23) {
+        throw e23;
     }
 }
 function Base64ToUint(b64Flag) {
-    const buff = Buffer.from(decodeURIComponent(b64Flag), "base64");
+    const buff = Buffer1.from(decodeURIComponent(b64Flag), "base64");
     const str = buff.toString("utf-8");
     const uint = [];
     for(let i31 = 0; i31 < str.length; i31++){
@@ -6076,11 +6637,11 @@ class BlocklistWrapper {
                 response.exceptionStack = this.exceptionStack ? this.exceptionStack : "Problem in loading blocklistFilter - Waiting Timeout";
                 response.exceptionFrom = this.exceptionFrom ? this.exceptionFrom : "blocklistWrapper.js RethinkModule";
             }
-        } catch (e16) {
+        } catch (e24) {
             response.isException = true;
-            response.exceptionStack = e16.stack;
+            response.exceptionStack = e24.stack;
             response.exceptionFrom = "blocklistWrapper.js RethinkModule";
-            log.e("Error At -> BlocklistWrapper RethinkModule", e16);
+            log.e("Error At -> BlocklistWrapper RethinkModule", e24);
         }
         return response;
     }
@@ -6100,14 +6661,14 @@ class BlocklistWrapper {
             log.d("done blocklist filter");
             this.isBlocklistUnderConstruction = false;
             response.data.blocklistFilter = this.blocklistFilter;
-        } catch (e17) {
+        } catch (e25) {
             this.isBlocklistUnderConstruction = false;
             response.isException = true;
-            response.exceptionStack = e17.stack;
+            response.exceptionStack = e25.stack;
             response.exceptionFrom = "blocklistWrapper.js initBlocklistConstruction";
             this.exceptionFrom = response.exceptionFrom;
             this.exceptionStack = response.exceptionStack;
-            log.e(e17);
+            log.e(e25);
         }
         return response;
     }
@@ -6137,8 +6698,8 @@ async function downloadBuildBlocklist(blocklistUrl, latestTimestamp, tdNodecount
         resp.blocklistBasicConfig = blocklistBasicConfig;
         resp.blocklistFileTag = downloads[0];
         return resp;
-    } catch (e18) {
-        throw e18;
+    } catch (e26) {
+        throw e26;
     }
 }
 async function fileFetch(url, typ) {
@@ -6202,514 +6763,6 @@ function concat(arraybuffers) {
         offset += a1.byteLength;
     }
     return buf;
-}
-class DNSAggCache {
-    constructor(){
-        this.dnsParser = new DNSParserWrap();
-        this.dnsBlockOperation = new DNSBlockOperation();
-        this.blocklistFilter = new BlocklistFilter();
-        this.wCache = null;
-    }
-    async RethinkModule(param) {
-        let response = {
-        };
-        response.isException = false;
-        response.exceptionStack = "";
-        response.exceptionFrom = "";
-        response.data = null;
-        try {
-            if (!param.isDnsMsg) {
-                return response;
-            }
-            response.data = await this.aggCache(param);
-        } catch (e19) {
-            response.isException = true;
-            response.exceptionStack = e19.stack;
-            response.exceptionFrom = "DNSAggCache RethinkModule";
-            console.error("Error At : DNSAggCache -> RethinkModule", e19);
-        }
-        return response;
-    }
-    async aggCache(param) {
-        let response = {
-        };
-        response.reqDecodedDnsPacket = this.dnsParser.Decode(param.requestBodyBuffer);
-        response.aggCacheResponse = {
-        };
-        response.aggCacheResponse.type = "none";
-        if (param.isAggCacheReq && this.wCache === null) {
-            this.wCache = caches.default;
-        }
-        if (param.isAggCacheReq) {
-            const dn = (response.reqDecodedDnsPacket.questions.length > 0 ? response.reqDecodedDnsPacket.questions[0].name : "").trim().toLowerCase() + ":" + response.reqDecodedDnsPacket.questions[0].type;
-            let cacheResponse = await getCacheapi(this.wCache, param.request.url, dn);
-            log.d("Cache Api Response", cacheResponse);
-            if (cacheResponse) {
-                response.aggCacheResponse = await parseCacheapiResponse(cacheResponse, this.dnsParser, this.dnsBlockOperation, this.blocklistFilter, param.userBlocklistInfo, response.reqDecodedDnsPacket);
-            }
-        }
-        return response;
-    }
-}
-async function parseCacheapiResponse(cacheResponse, dnsParser, dnsBlockOperation, blocklistFilter, userBlocklistInfo, reqDecodedDnsPacket) {
-    let response = {
-    };
-    response.type = "none";
-    response.data = {
-    };
-    let metaData = JSON.parse(cacheResponse.headers.get("x-rethink-metadata"));
-    console.debug("Response Found at CacheApi");
-    console.debug(JSON.stringify(metaData));
-    if ((reqDecodedDnsPacket.questions[0].type == "A" || reqDecodedDnsPacket.questions[0].type == "AAAA" || reqDecodedDnsPacket.questions[0].type == "CNAME" || reqDecodedDnsPacket.questions[0].type == "HTTPS" || reqDecodedDnsPacket.questions[0].type == "SVCB") && metaData.blocklistInfo && !emptyString(userBlocklistInfo.userBlocklistFlagUint)) {
-        metaData.blocklistInfo = new Map(Object.entries(metaData.blocklistInfo));
-        let blockResponse = dnsBlockOperation.checkDomainBlocking(userBlocklistInfo.userBlocklistFlagUint, userBlocklistInfo.userServiceListUint, userBlocklistInfo.flagVersion, metaData.blocklistInfo, blocklistFilter, reqDecodedDnsPacket.questions[0].name.trim().toLowerCase());
-        if (blockResponse.isBlocked) {
-            response.type = "blocked";
-            response.data = blockResponse;
-            return response;
-        }
-    }
-    if (metaData.bodyUsed) {
-        const now = Date.now();
-        if (now <= metaData.ttlEndTime) {
-            response.type = "response";
-            response.data.decodedDnsPacket = dnsParser.Decode(await cacheResponse.arrayBuffer());
-            const outttl = Math.max(Math.floor((metaData.ttlEndTime - now) / 1000), 1);
-            for (let answer1 of response.data.decodedDnsPacket.answers){
-                answer1.ttl = outttl;
-            }
-            response.data.bodyBuffer = dnsParser.Encode(response.data.decodedDnsPacket);
-        }
-    }
-    return response;
-}
-async function getCacheapi(wCache, reqUrl, key) {
-    let wCacheUrl = new URL(new URL(reqUrl).origin + "/" + key);
-    return await wCache.match(wCacheUrl);
-}
-const minDNSPacketSize = 12 + 5;
-const dns = new DNSParserWrap();
-function servfail(qid, qs) {
-    if (!qid || !qs) return null;
-    return dns.Encode({
-        id: qid,
-        type: "response",
-        flags: 4098,
-        questions: qs
-    });
-}
-function requestTimeout() {
-    const t = workersTimeout(15000);
-    return t > 5000 ? Math.min(t, 30000) : 5000;
-}
-function truncated(ans) {
-    if (ans.length < 12) return false;
-    const flags = ans.readUInt16BE(2);
-    const tc = flags >> 9 & 1;
-    return tc === 1;
-}
-function validResponseSize(r) {
-    return r && validateSize(r.byteLength);
-}
-function validateSize(sz) {
-    return sz >= minDNSPacketSize && sz <= 4096;
-}
-function hasAnswers(packet) {
-    return packet && packet.answers && packet.answers.length > 0;
-}
-function rcodeNoError(packet) {
-    return packet && packet.rcode === "NOERROR";
-}
-function dnsqurl(dnsq) {
-    return btoa(String.fromCharCode(...new Uint8Array(dnsq))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
-}
-function optAnswer(a) {
-    return a && a.type && a.type.toUpperCase() === "OPT";
-}
-const quad1 = "1.1.1.2";
-const ttlGraceSec = 30;
-const dnsCacheSize = 10000;
-class DNSResolver {
-    constructor(){
-        this.dnsParser = new DNSParserWrap();
-        this.dnsResCache = null;
-        this.httpCache = null;
-        this.http2 = null;
-        this.nodeUtil = null;
-        this.transport = null;
-    }
-    async lazyInit() {
-        if (!this.dnsResCache) {
-            this.dnsResCache = new LocalCache("dns-response-cache", dnsCacheSize);
-        }
-        if (isWorkers() && !this.httpCache) {
-            this.httpCache = caches.default;
-        }
-        if (isNode() && !this.http2) {
-            this.http2 = await import("http2");
-            this.nodeUtil = await import("../helpers/node/util.js");
-        }
-        if (isNode() && !this.transport) {
-            this.transport = new (await import("../helpers/node/dns-transport.js")).Transport(quad1, 53);
-        }
-    }
-    async RethinkModule(param) {
-        await this.lazyInit();
-        let response = emptyResponse();
-        try {
-            response.data = await this.resolveRequest(param);
-        } catch (e20) {
-            response = errResponse("dnsResolver", e20);
-            log.e("Err DNSResolver -> RethinkModule", e20);
-        }
-        return response;
-    }
-    async resolveRequest(param) {
-        let cres = await this.resolveFromCache(param);
-        if (!cres) {
-            cres = await this.upstreamQuery(param);
-            safeBox(()=>{
-                this.updateCachesIfNeeded(param, cres);
-            });
-        }
-        if (!cres) {
-            throw new Error("No answer from cache or upstream", cres);
-        }
-        return {
-            responseBodyBuffer: cres.dnsPacket,
-            responseDecodedDnsPacket: cres.decodedDnsPacket
-        };
-    }
-    async resolveFromCache(param) {
-        const key = this.cacheKey(param.requestDecodedDnsPacket);
-        const qid = param.requestDecodedDnsPacket.id;
-        const url = param.request.url;
-        if (!key) return null;
-        let cacheRes = this.resolveFromLocalCache(qid, key);
-        if (!cacheRes) {
-            cacheRes = await this.resolveFromHttpCache(qid, url, key);
-            this.updateLocalCacheIfNeeded(key, cacheRes);
-        }
-        return cacheRes;
-    }
-    resolveFromLocalCache(queryId, key) {
-        const cres = this.dnsResCache.Get(key);
-        if (!cres) return false;
-        return this.makeCacheResponse(queryId, cres.dnsPacket, cres.ttlEndTime);
-    }
-    async resolveFromHttpCache(queryId, url, key) {
-        if (!this.httpCache) return false;
-        const hKey = this.httpCacheKey(url, key);
-        const resp = await this.httpCache.match(hKey);
-        if (!resp) return false;
-        const metadata = JSON.parse(resp.headers.get("x-rethink-metadata"));
-        const dnsPacket = await resp.arrayBuffer();
-        return this.makeCacheResponse(queryId, dnsPacket, metadata.ttlEndTime);
-    }
-    makeCacheResponse(queryId, dnsPacket, expiry = null) {
-        if (expiry !== null && expiry < Date.now()) {
-            log.d("mkcache stale", expiry);
-            return false;
-        }
-        const decodedDnsPacket = safeBox(()=>{
-            return this.dnsParser.Decode(dnsPacket);
-        });
-        if (!decodedDnsPacket) {
-            log.w("mkcache decode failed", expiry);
-            return false;
-        }
-        if (expiry === null) {
-            expiry = this.determineCacheExpiry(decodedDnsPacket);
-        }
-        let reencode = this.updateTtl(decodedDnsPacket, expiry);
-        reencode = this.updateQueryId(decodedDnsPacket, queryId) || reencode;
-        const updatedDnsPacket = safeBox(()=>{
-            return reencode ? this.dnsParser.Encode(decodedDnsPacket) : dnsPacket;
-        });
-        if (!updatedDnsPacket) {
-            log.w("mkcache re-encode failed", decodedDnsPacket, expiry);
-            return false;
-        }
-        const cacheRes = {
-            dnsPacket: updatedDnsPacket,
-            decodedDnsPacket: decodedDnsPacket,
-            ttlEndTime: expiry
-        };
-        return cacheRes;
-    }
-    async updateCachesIfNeeded(param, cacheRes) {
-        if (!cacheRes) return;
-        const k = this.cacheKey(param.requestDecodedDnsPacket);
-        if (!k) return;
-        this.updateLocalCacheIfNeeded(k, cacheRes);
-        this.updateHttpCacheIfNeeded(param, k, cacheRes);
-    }
-    updateLocalCacheIfNeeded(k, v) {
-        if (!k || !v) return;
-        if (!v.ttlEndTime) return;
-        const nv = {
-            dnsPacket: v.dnsPacket,
-            ttlEndTime: v.ttlEndTime
-        };
-        this.dnsResCache.Put(k, nv);
-    }
-    updateHttpCacheIfNeeded(param, k, cacheRes) {
-        if (!this.httpCache) return;
-        if (!k || !cacheRes) return;
-        if (!cacheRes.ttlEndTime) return;
-        const cacheUrl = this.httpCacheKey(param.request.url, k);
-        const value = new Response(cacheRes.dnsPacket, {
-            headers: this.httpCacheHeaders(cacheRes, param.blocklistFilter)
-        });
-        param.event.waitUntil(this.httpCache.put(cacheUrl, value));
-    }
-    httpCacheHeaders(cres, blFilter) {
-        return concatHeaders({
-            "x-rethink-metadata": JSON.stringify(this.httpCacheMetadata(cres, blFilter))
-        }, contentLengthHeader(cres.dnsPacket), dnsHeaders(), {
-            cf: {
-                cacheTtl: 604800
-            }
-        });
-    }
-    async upstreamQuery(param) {
-        const upRes = await this.resolveDnsUpstream(param.request, param.dnsResolverUrl, param.requestBodyBuffer);
-        if (!upRes) throw new Error("no upstream result");
-        if (!upRes.ok) {
-            log.d("!OK", upRes.status, upRes.statusText, await upRes.text());
-            throw new Error(upRes.status + " http err: " + upRes.statusText);
-        }
-        const dnsPacket = await upRes.arrayBuffer();
-        if (!validResponseSize(dnsPacket)) {
-            throw new Error("inadequate response from upstream");
-        }
-        const queryId = param.requestDecodedDnsPacket.id;
-        return this.makeCacheResponse(queryId, dnsPacket);
-    }
-    determineCacheExpiry(decodedDnsPacket) {
-        if (!rcodeNoError(decodedDnsPacket)) return 0;
-        if (!hasAnswers(decodedDnsPacket)) return 0;
-        let minttl = 1 << 30;
-        for (let a of decodedDnsPacket.answers){
-            minttl = Math.min(a.ttl || minttl, minttl);
-        }
-        if (minttl === 1 << 30) return 0;
-        minttl = Math.max(minttl + ttlGraceSec, ttlGraceSec);
-        const expiry = Date.now() + minttl * 1000;
-        return expiry;
-    }
-    cacheKey(packet) {
-        if (packet.questions.length != 1) return null;
-        const name = packet.questions[0].name.trim().toLowerCase();
-        const type = packet.questions[0].type;
-        return name + ":" + type;
-    }
-    httpCacheKey(u, p) {
-        return new URL(new URL(u).origin + "/" + p);
-    }
-    updateQueryId(decodedDnsPacket, queryId) {
-        if (queryId === 0) return false;
-        if (queryId === decodedDnsPacket.id) return false;
-        decodedDnsPacket.id = queryId;
-        return true;
-    }
-    updateTtl(decodedDnsPacket, end) {
-        let updated = false;
-        const now = Date.now();
-        if (end < now) return updated;
-        const outttl = Math.max(Math.floor((end - now) / 1000), 30);
-        for (let a of decodedDnsPacket.answers){
-            if (optAnswer(a)) continue;
-            if (a.ttl === outttl) continue;
-            updated = true;
-            a.ttl = outttl;
-        }
-        return updated;
-    }
-}
-DNSResolver.prototype.resolveDnsUpstream = async function(request, resolverUrl, requestBodyBuffer) {
-    try {
-        if (this.transport) {
-            const q = bufferOf(requestBodyBuffer);
-            let ans = await this.transport.udpquery(q);
-            if (ans && truncated(ans)) {
-                log.w("ans truncated, retrying over tcp");
-                ans = await this.transport.tcpquery(q);
-            }
-            return ans ? new Response(arrayBufferOf(ans)) : new Response(null, {
-                status: 503
-            });
-        }
-        let u = new URL(request.url);
-        let dnsResolverUrl = new URL(resolverUrl);
-        u.hostname = dnsResolverUrl.hostname;
-        u.pathname = dnsResolverUrl.pathname;
-        u.port = dnsResolverUrl.port;
-        u.protocol = dnsResolverUrl.protocol;
-        let newRequest = null;
-        if (request.method === "GET" || isWorkers() && request.method === "POST") {
-            u.search = "?dns=" + dnsqurl(requestBodyBuffer);
-            newRequest = new Request(u.href, {
-                method: "GET"
-            });
-        } else if (request.method === "POST") {
-            newRequest = new Request(u.href, {
-                method: "POST",
-                headers: concatHeaders(contentLengthHeader(requestBodyBuffer), dnsHeaders()),
-                body: requestBodyBuffer
-            });
-        } else {
-            throw new Error("get/post requests only");
-        }
-        return this.http2 ? this.doh2(newRequest) : fetch(newRequest);
-    } catch (e21) {
-        throw e21;
-    }
-};
-DNSResolver.prototype.doh2 = async function(request) {
-    console.debug("upstream using h2");
-    const http2 = this.http2;
-    const transformPseudoHeaders = this.nodeUtil.transformPseudoHeaders;
-    const u = new URL(request.url);
-    const reqB = bufferOf(await request.arrayBuffer());
-    const headers1 = copyHeaders(request);
-    return new Promise((resolve, reject)=>{
-        const authority = u.origin;
-        const c = http2.connect(authority);
-        c.on("error", (err)=>{
-            reject(err.message);
-        });
-        const req = c.request({
-            [http2.constants.HTTP2_HEADER_METHOD]: request.method,
-            [http2.constants.HTTP2_HEADER_PATH]: `${u.pathname}`,
-            ...headers1
-        });
-        req.on("response", (headers)=>{
-            const resBuffers = [];
-            const resH = transformPseudoHeaders(headers);
-            req.on("data", (chunk)=>{
-                resBuffers.push(chunk);
-            });
-            req.on("end", ()=>{
-                const resB = Buffer.concat(resBuffers);
-                c.close();
-                resolve(new Response(resB, resH));
-            });
-            req.on("error", (err)=>{
-                reject(err.message);
-            });
-        });
-        req.end(reqB);
-    });
-};
-class CurrentRequest {
-    constructor(){
-        this.blockedB64Flag = "";
-        this.decodedDnsPacket = this.emptyDecodedDnsPacket();
-        this.httpResponse = undefined;
-        this.isException = false;
-        this.exceptionStack = undefined;
-        this.exceptionFrom = "";
-        this.isDnsParseException = false;
-        this.isDnsBlock = false;
-        this.isInvalidFlagBlock = false;
-        this.stopProcessing = false;
-        this.dnsParser = new DNSParserWrap();
-    }
-    emptyDecodedDnsPacket() {
-        return {
-            id: 0,
-            questions: null
-        };
-    }
-    initDecodedDnsPacketIfNeeded() {
-        if (!this.decodedDnsPacket) {
-            this.decodedDnsPacket = this.emptyDecodedDnsPacket();
-        }
-    }
-    dnsExceptionResponse() {
-        this.initDecodedDnsPacketIfNeeded();
-        const qid = this.decodedDnsPacket.id;
-        const questions = this.decodedDnsPacket.questions;
-        const ex = {
-            exceptionFrom: this.exceptionFrom,
-            exceptionStack: this.exceptionStack
-        };
-        const servfail2 = servfail(qid, questions);
-        this.httpResponse = new Response(servfail2, {
-            headers: concatHeaders(this.headers(), this.additionalHeader(JSON.stringify(ex))),
-            status: servfail2 ? 200 : 500
-        });
-    }
-    customResponse(x) {
-        this.httpResponse = new Response(null, {
-            headers: concatHeaders(this.headers(), this.additionalHeader(JSON.stringify(x)))
-        });
-    }
-    dnsResponse(arrayBuffer) {
-        this.httpResponse = new Response(arrayBuffer, {
-            headers: this.headers()
-        });
-    }
-    dnsBlockResponse() {
-        this.initDecodedDnsPacketIfNeeded();
-        try {
-            this.decodedDnsPacket.type = "response";
-            this.decodedDnsPacket.rcode = "NOERROR";
-            this.decodedDnsPacket.flags = 384;
-            this.decodedDnsPacket.flag_qr = true;
-            this.decodedDnsPacket.answers = [];
-            this.decodedDnsPacket.answers[0] = {
-            };
-            this.decodedDnsPacket.answers[0].name = this.decodedDnsPacket.questions[0].name;
-            this.decodedDnsPacket.answers[0].type = this.decodedDnsPacket.questions[0].type;
-            this.decodedDnsPacket.answers[0].ttl = 300;
-            this.decodedDnsPacket.answers[0].class = "IN";
-            this.decodedDnsPacket.answers[0].data = "";
-            this.decodedDnsPacket.answers[0].flush = false;
-            if (this.decodedDnsPacket.questions[0].type == "A") {
-                this.decodedDnsPacket.answers[0].data = "0.0.0.0";
-            } else if (this.decodedDnsPacket.questions[0].type == "AAAA") {
-                this.decodedDnsPacket.answers[0].data = "::";
-            } else if (this.decodedDnsPacket.questions[0].type == "HTTPS" || this.decodedDnsPacket.questions[0].type == "SVCB") {
-                this.decodedDnsPacket.answers[0].data = {
-                };
-                this.decodedDnsPacket.answers[0].data.svcPriority = 0;
-                this.decodedDnsPacket.answers[0].data.targetName = ".";
-                this.decodedDnsPacket.answers[0].data.svcParams = {
-                };
-            }
-            this.decodedDnsPacket.authorities = [];
-            this.httpResponse = new Response(this.dnsParser.Encode(this.decodedDnsPacket), {
-                headers: this.headers()
-            });
-        } catch (e22) {
-            log.e(JSON.stringify(this.decodedDnsPacket));
-            this.isException = true;
-            this.exceptionStack = e22.stack;
-            this.exceptionFrom = "CurrentRequest dnsBlockResponse";
-        }
-    }
-    headers() {
-        const xNileFlags = this.isDnsBlock ? {
-            "x-nile-flags": this.blockedB64Flag
-        } : null;
-        const xNileFlagsAllowed = this.blockedB64Flag ? {
-            "x-nile-flags-allowed": this.blockedB64Flag
-        } : null;
-        return concatHeaders(dnsHeaders(), xNileFlags, xNileFlagsAllowed);
-    }
-    additionalHeader(json) {
-        if (!json) return null;
-        return {
-            "x-nile-add": json
-        };
-    }
-    setCorsHeaders() {
-        for (const [name, value] of Object.entries(corsHeaders())){
-            this.httpResponse.headers.set(name, value);
-        }
-    }
 }
 class CommandControl {
     constructor(){
@@ -6790,9 +6843,9 @@ class CommandControl {
                     statusText: "Bad Request"
                 });
             }
-        } catch (e23) {
+        } catch (e27) {
             response.isException = true;
-            response.exceptionStack = e23.stack;
+            response.exceptionStack = e27.stack;
             response.exceptionFrom = "CommandControl commandOperation";
             response.data.httpResponse = jsonResponse(response.exceptionStack);
         }
@@ -6891,7 +6944,7 @@ function jsonResponse(obj) {
 }
 class UserOperation {
     constructor(){
-        this.userConfigCache = false;
+        this.userConfigCache = new UserCache(1000);
         this.blocklistFilter = new BlocklistFilter();
     }
     async RethinkModule(param) {
@@ -6912,14 +6965,11 @@ class UserOperation {
             if (!param.isDnsMsg) {
                 return response;
             }
-            if (!this.userConfigCache) {
-                this.userConfigCache = new LocalCache("User-Config-Cache", 1000);
-            }
             let userBlocklistInfo = {
             };
             userBlocklistInfo.from = "Cache";
             let blocklistFlag = getBlocklistFlag(param.request.url);
-            let currentUser = this.userConfigCache.Get(blocklistFlag);
+            let currentUser = this.userConfigCache.get(blocklistFlag);
             if (!currentUser) {
                 currentUser = {
                 };
@@ -6930,24 +6980,24 @@ class UserOperation {
                 currentUser.userBlocklistFlagUint = response.userBlocklistFlagUint;
                 currentUser.flagVersion = response.flagVersion;
                 if (!emptyString(currentUser.userBlocklistFlagUint)) {
-                    currentUser.userServiceListUint = this.blocklistFilter.flagIntersection(currentUser.userBlocklistFlagUint, this.blocklistFilter.wildCardUint);
+                    currentUser.userServiceListUint = flagIntersection(currentUser.userBlocklistFlagUint, this.blocklistFilter.wildCardUint);
                 } else {
                     blocklistFlag = "";
                 }
                 userBlocklistInfo.from = "Generated";
-                this.userConfigCache.Put(blocklistFlag, currentUser);
+                this.userConfigCache.put(blocklistFlag, currentUser);
             }
             userBlocklistInfo.userBlocklistFlagUint = currentUser.userBlocklistFlagUint;
             userBlocklistInfo.flagVersion = currentUser.flagVersion;
             userBlocklistInfo.userServiceListUint = currentUser.userServiceListUint;
             response.data.userBlocklistInfo = userBlocklistInfo;
             response.data.dnsResolverUrl = param.dnsResolverUrl;
-        } catch (e24) {
+        } catch (e28) {
             response.isException = true;
-            response.exceptionStack = e24.stack;
+            response.exceptionStack = e28.stack;
             response.exceptionFrom = "UserOperation loadUser";
             console.error("Error At : UserOperation -> loadUser");
-            console.error(e24.stack);
+            console.error(e28.stack);
         }
         return response;
     }
@@ -6968,28 +7018,33 @@ function getBlocklistFlag(url) {
 const blocklistWrapper = new BlocklistWrapper();
 const commandControl = new CommandControl();
 const userOperation = new UserOperation();
-const dnsBlock = new DNSBlock();
+const dnsQuestionBlock = new DNSQuestionBlock();
 const dnsResolver = new DNSResolver();
 const dnsResponseBlock = new DNSResponseBlock();
-const dnsAggCache = new DNSAggCache();
+const dnsCacheHandler = new DNSCacheResponse();
+const dnsCache = new DnsCache(10000);
 class RethinkPlugin {
     constructor(event){
         this.parameter = new Map(envManager.getMap());
         this.registerParameter("request", event.request);
         this.registerParameter("event", event);
-        this.registerParameter("isDnsMsg", isDnsMsg(event.request));
+        this.registerParameter("dnsQuestionBlock", dnsQuestionBlock);
+        this.registerParameter("dnsResponseBlock", dnsResponseBlock);
+        this.registerParameter("dnsCache", dnsCache);
         this.plugin = [];
         this.registerPlugin("userOperation", userOperation, [
             "dnsResolverUrl",
             "request",
             "isDnsMsg"
         ], userOperationCallBack, false);
-        this.registerPlugin("AggressiveCaching", dnsAggCache, [
+        this.registerPlugin("AggressiveCaching", dnsCacheHandler, [
             "userBlocklistInfo",
             "request",
-            "requestBodyBuffer",
-            "isAggCacheReq",
-            "isDnsMsg", 
+            "requestDecodedDnsPacket",
+            "isDnsMsg",
+            "dnsCache",
+            "dnsQuestionBlock",
+            "dnsResponseBlock", 
         ], dnsAggCacheCallBack, false);
         this.registerPlugin("blocklistFilter", blocklistWrapper, [
             "blocklistUrl",
@@ -7003,33 +7058,37 @@ class RethinkPlugin {
             "request",
             "blocklistFilter",
             "latestTimestamp",
-            "isDnsMsg", 
+            "isDnsMsg"
         ], commandControlCallBack, false);
-        this.registerPlugin("dnsBlock", dnsBlock, [
+        this.registerPlugin("dnsQuestionBlock", dnsQuestionBlock, [
             "requestDecodedDnsPacket",
             "blocklistFilter",
             "userBlocklistInfo",
-            "isAggCacheReq",
             "event",
-            "request", 
-        ], dnsBlockCallBack, false);
+            "request",
+            "dnsCache", 
+        ], dnsQuestionBlockCallBack, false);
         this.registerPlugin("dnsResolver", dnsResolver, [
             "requestBodyBuffer",
             "request",
             "dnsResolverUrl",
-            "cloudPlatform",
             "requestDecodedDnsPacket",
             "event",
-            "blocklistFilter", 
+            "blocklistFilter",
+            "dnsCache", 
         ], dnsResolverCallBack, false);
         this.registerPlugin("DNSResponseBlock", dnsResponseBlock, [
             "userBlocklistInfo",
             "blocklistFilter",
-            "responseDecodedDnsPacket"
+            "responseDecodedDnsPacket",
+            "responseBodyBuffer",
+            "event",
+            "request",
+            "dnsCache", 
         ], dnsResponseBlockCallBack, false);
     }
-    registerParameter(key, parameter) {
-        this.parameter.set(key, parameter);
+    registerParameter(k, v) {
+        this.parameter.set(k, v);
     }
     registerPlugin(pluginName, module, parameter, callBack, continueOnStopProcess) {
         this.plugin.push({
@@ -7041,6 +7100,7 @@ class RethinkPlugin {
         });
     }
     async executePlugin(req) {
+        await setRequest(this.parameter, req);
         const t = log.startTime("exec-plugin");
         for (const p of this.plugin){
             if (req.stopProcessing && !p.continueOnStopProcess) {
@@ -7076,14 +7136,7 @@ async function userOperationCallBack(response, currentRequest) {
     log.d("In userOperationCallBack", JSON.stringify(response.data));
     if (response.isException) {
         loadException(response, currentRequest);
-    } else if (!this.parameter.get("isDnsMsg") && this.parameter.get("request").method === "POST") {
-        currentRequest.httpResponse = new Response(null, {
-            status: 400,
-            statusText: "Bad Request"
-        });
-        currentRequest.stopProcessing = true;
     } else {
-        this.registerParameter("requestBodyBuffer", await getBodyBuffer(this.parameter.get("request"), this.parameter.get("isDnsMsg")));
         this.registerParameter("userBlocklistInfo", response.data.userBlocklistInfo);
         this.registerParameter("dnsResolverUrl", response.data.dnsResolverUrl);
     }
@@ -7092,28 +7145,23 @@ function dnsAggCacheCallBack(response, currentRequest) {
     log.d("In dnsAggCacheCallBack", JSON.stringify(response.data));
     if (response.isException) {
         loadException(response, currentRequest);
-    } else if (response.data !== null) {
-        this.registerParameter("requestDecodedDnsPacket", response.data.reqDecodedDnsPacket);
-        currentRequest.decodedDnsPacket = response.data.reqDecodedDnsPacket;
-        if (response.data.aggCacheResponse.type === "blocked") {
-            currentRequest.isDnsBlock = response.data.aggCacheResponse.data.isBlocked;
-            currentRequest.blockedB64Flag = response.data.aggCacheResponse.data.blockedB64Flag;
-            currentRequest.stopProcessing = true;
-            currentRequest.dnsBlockResponse();
-        } else if (response.data.aggCacheResponse.type === "response") {
-            this.registerParameter("responseBodyBuffer", response.data.aggCacheResponse.data.bodyBuffer);
-            this.registerParameter("responseDecodedDnsPacket", response.data.aggCacheResponse.data.decodedDnsPacket);
-            currentRequest.dnsResponse(response.data.aggCacheResponse.data.bodyBuffer);
-            currentRequest.decodedDnsPacket = response.data.aggCacheResponse.data.decodedDnsPacket;
-            currentRequest.stopProcessing = true;
-        }
+    } else if (response.data && response.data.isBlocked) {
+        currentRequest.isDnsBlock = response.data.isBlocked;
+        currentRequest.blockedB64Flag = response.data.blockedB64Flag;
+        currentRequest.stopProcessing = true;
+        currentRequest.dnsBlockResponse();
+    } else if (response.data && response.data.dnsBuffer) {
+        this.registerParameter("responseDecodedDnsPacket", response.data.dnsPacket);
+        currentRequest.dnsResponse(response.data.dnsBuffer);
+        currentRequest.decodedDnsPacket = response.data.dnsPacket;
+        currentRequest.stopProcessing = true;
     }
 }
-function dnsBlockCallBack(response, currentRequest) {
-    log.d("In dnsBlockCallBack", JSON.stringify(response.data));
+function dnsQuestionBlockCallBack(response, currentRequest) {
+    log.d("In dnsQuestionBlockCallBack", JSON.stringify(response.data));
     if (response.isException) {
         loadException(response, currentRequest);
-    } else {
+    } else if (response.data) {
         currentRequest.isDnsBlock = response.data.isBlocked;
         currentRequest.blockedB64Flag = response.data.blockedB64Flag;
         if (currentRequest.isDnsBlock) {
@@ -7127,25 +7175,23 @@ function dnsResolverCallBack(response, currentRequest) {
     if (response.isException) {
         loadException(response, currentRequest);
     } else {
-        this.registerParameter("responseBodyBuffer", response.data.responseBodyBuffer);
-        this.registerParameter("responseDecodedDnsPacket", response.data.responseDecodedDnsPacket);
-        currentRequest.decodedDnsPacket = response.data.responseDecodedDnsPacket;
+        this.registerParameter("responseBodyBuffer", response.data.dnsBuffer);
+        this.registerParameter("responseDecodedDnsPacket", response.data.dnsPacket);
     }
 }
 function dnsResponseBlockCallBack(response, currentRequest) {
     log.d("In dnsResponseBlockCallBack", JSON.stringify(response.data));
     if (response.isException) {
         loadException(response, currentRequest);
-    } else {
+    } else if (response.data && response.data.isBlocked) {
         currentRequest.isDnsBlock = response.data.isBlocked;
-        currentRequest.blockedB64Flag = response.data.blockedB64Flag;
-        if (currentRequest.isDnsBlock) {
-            currentRequest.stopProcessing = true;
-            currentRequest.dnsBlockResponse();
-        } else {
-            currentRequest.dnsResponse(this.parameter.get("responseBodyBuffer"));
-            currentRequest.stopProcessing = true;
-        }
+        currentRequest.blockedB64Flag = response.data.blockedB64Flag !== "" ? response.data.blockedB64Flag : currentRequest.blockedB64Flag;
+        currentRequest.stopProcessing = true;
+        currentRequest.dnsBlockResponse();
+    } else {
+        currentRequest.dnsResponse(this.parameter.get("responseBodyBuffer"));
+        currentRequest.decodedDnsPacket = this.parameter.get("responseDecodedDnsPacket");
+        currentRequest.stopProcessing = true;
     }
 }
 function loadException(response, currentRequest) {
@@ -7166,16 +7212,40 @@ function generateParam(parameter, list) {
     }
     return param;
 }
-async function getBodyBuffer(request, isDnsMsg2) {
-    if (!isDnsMsg2) {
-        return "";
+async function setRequest(parameter, currentRequest) {
+    let request = parameter.get("request");
+    parameter.set("isDnsMsg", isDnsMsg(request));
+    const isDnsMsg2 = parameter.get("isDnsMsg");
+    if (!isValidRequest(isDnsMsg2, request)) {
+        setInvalidResponse(currentRequest);
+        return;
     }
+    if (!isDnsMsg2) {
+        return;
+    }
+    let buf = await getBodyBuffer(request);
+    parameter.set("requestBodyBuffer", buf);
+    parameter.set("requestDecodedDnsPacket", decode3(buf));
+    currentRequest.decodedDnsPacket = parameter.get("requestDecodedDnsPacket");
+}
+async function getBodyBuffer(request) {
     if (request.method.toUpperCase() === "GET") {
         const QueryString = new URL(request.url).searchParams;
         return base64ToArrayBuffer(decodeURI(QueryString.get("dns")).replace(/-/g, "+").replace(/_/g, "/"));
     } else {
         return await request.arrayBuffer();
     }
+}
+function setInvalidResponse(currentRequest) {
+    currentRequest.httpResponse = new Response(null, {
+        status: 400,
+        statusText: "Bad Request"
+    });
+    currentRequest.stopProcessing = true;
+}
+function isValidRequest(isDnsMsg3, req) {
+    if (!isDnsMsg3 && req.method.toUpperCase() === "POST") return false;
+    return true;
 }
 function base64ToArrayBuffer(base64) {
     const binaryString = atob(base64);
@@ -7467,14 +7537,14 @@ async function handleHttp(conn1) {
     while(true){
         try {
             requestEvent = await httpConn.nextRequest();
-        } catch (e25) {
-            console.warn("error reading http request", e25);
+        } catch (e29) {
+            console.warn("error reading http request", e29);
         }
         if (requestEvent) {
             try {
                 await requestEvent.respondWith(handleRequest(requestEvent));
-            } catch (e26) {
-                console.warn("error handling http request", e26);
+            } catch (e30) {
+                console.warn("error handling http request", e30);
             }
         }
     }
