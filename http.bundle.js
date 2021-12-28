@@ -7356,7 +7356,7 @@ class Log {
     setLevel(level) {
         if (!_LOG_LEVELS.has(level)) throw new Error(`Unknown log level: ${level}`);
         if (console.level && _LOG_LEVELS.get(level) < _LOG_LEVELS.get(console.level)) {
-            throw new Error(`Cannot set (log.level='${level}') < (console.level = '${console.level}')`);
+            throw new Error("Cannot set " + `(log.level='${level}') < (console.level = '${console.level}')`);
         }
         this._resetLevel();
         switch(level){
