@@ -2548,14 +2548,13 @@ function emptyString(str) {
     return !str || str.length === 0;
 }
 function isWorkers() {
-    return env && env.runTimeEnv === "worker";
+    return env && env.runTime === "worker";
 }
 function isNode() {
     return env && env.runTime === "node";
 }
 function workersTimeout(defaultValue = 0) {
-    if (envManager) return envManager.get("workerTimeout") || defaultValue;
-    return defaultValue;
+    return env && env.workerTimeout || defaultValue;
 }
 function isBlocklistFiter(blf) {
     return blf && blf.t && blf.ft;
