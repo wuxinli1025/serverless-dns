@@ -5374,7 +5374,7 @@ function putCache(cache, url, blf, dnsPacket, buf, event) {
     const key = cacheKey(dnsPacket);
     if (!key) return;
     let input = createCacheInput(dnsPacket, blf, false);
-    event.waitUntil(cache.put(key, input, url, buf));
+    cache.put(key, input, url, buf, event);
 }
 function doHttpsBlock(dnsPacket, blf, blockInfo, cf) {
     console.debug("At Https-Svcb dns Block");
@@ -5398,7 +5398,7 @@ function putCache1(cache, url, blf, dnsPacket, buf, event) {
     if (!key) return;
     let input = createCacheInput(dnsPacket, blf, true);
     console.debug("Cache Input ", JSON.stringify(input));
-    event.waitUntil(cache.put(key, input, url, buf));
+    cache.put(key, input, url, buf, event);
 }
 async function parseCacheResponse(cr, blockInfo, reqDnsPacket, qb, rb) {
     let response = checkDnsBlock(qb, reqDnsPacket, cr.metaData.cacheFilter, blockInfo);
@@ -5406,8 +5406,7 @@ async function parseCacheResponse(cr, blockInfo, reqDnsPacket, qb, rb) {
     if (response && response.isBlocked) {
         return response;
     }
-    const now = Date.now();
-    if (!cr.metaData.bodyUsed || now > cr.metaData.ttlEndTime) {
+    if (!cr.metaData.bodyUsed) {
         return false;
     }
     response = checkDnsBlock(rb, cr.dnsPacket, cr.metaData.cacheFilter, blockInfo);
@@ -6359,12 +6358,12 @@ class DnsCache {
         this.putLocalCache(key, entry);
         return entry;
     }
-    async put(key, data, url, buf) {
+    put(key, data, url, buf, event) {
         try {
             this.putLocalCache(key, data);
-            if (url && isWorkers()) {
+            if (url && isWorkers() && event && event.waitUntil) {
                 console.debug("Adding to cache api");
-                this.putCacheApi(key, url, buf, data.metaData);
+                event.waitUntil(this.putCacheApi(key, url, buf, data.metaData));
             }
         } catch (e20) {
             console.error(e20.stack);
@@ -6385,7 +6384,7 @@ class DnsCache {
     async getCacheApi(key) {
         return await this.cacheApi.get(key);
     }
-    putCacheApi(key, url, buf, metaData) {
+    async putCacheApi(key, url, buf, metaData) {
         let response = createResponse(buf, metaData, 604800);
         const cacheApiKey = makeCacheApiKey(key, url);
         this.cacheApi.put(cacheApiKey, response);
