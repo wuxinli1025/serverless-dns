@@ -7255,7 +7255,7 @@ function base64ToArrayBuffer(base64) {
     }
     return bytes.buffer;
 }
-const _RUNTIME_ENV_MAPPINGS = {
+const _ENV_VAR_MAPPINGS = {
     runTime: "RUNTIME",
     runTimeEnv: {
         worker: "WORKER_ENV",
@@ -7292,15 +7292,15 @@ function _getRuntimeEnv(runtime) {
     console.info("Loading env. from runtime:", runtime);
     const env = {
     };
-    for (const [key, value] of Object.entries(_RUNTIME_ENV_MAPPINGS)){
+    for (const [key, mapping] of Object.entries(_ENV_VAR_MAPPINGS)){
         let name = null;
         let type = "string";
-        if (typeof value === "string") {
-            name = value;
-        } else if (typeof value === "object") {
-            name = value.all || value[runtime];
-            type = value.type || "string";
-        }
+        if (typeof mapping === "string") {
+            name = mapping;
+        } else if (typeof mapping === "object") {
+            name = mapping.all || mapping[runtime];
+            type = mapping.type || type;
+        } else throw new Error("Unfamiliar mapping");
         if (runtime === "node") env[key] = process.env[name];
         else if (runtime === "deno") env[key] = name && Deno.env.get(name);
         else if (runtime === "worker") env[key] = globalThis[name];
@@ -7308,11 +7308,12 @@ function _getRuntimeEnv(runtime) {
         if (type === "boolean") env[key] = !!env[key];
         else if (type === "number") env[key] = Number(env[key]);
         else if (type === "string") env[key] = env[key] || "";
+        else throw new Error(`Unsupported type: ${type}`);
     }
     return env;
 }
 function _getRuntime() {
-    if (globalThis.RUNTIME == "worker") return "worker";
+    if (globalThis.RUNTIME === "worker") return "worker";
     if (typeof Deno !== "undefined") return "deno";
     if (typeof process !== "undefined") return "node";
 }
@@ -7330,8 +7331,8 @@ class EnvManager {
         for (const [key, value] of Object.entries(env)){
             this.envMap.set(key, value);
         }
-        runtime == "worker" && this.envMap.set("workerTimeout", Number(WORKER_TIMEOUT) + Number(CF_BLOCKLIST_DOWNLOAD_TIMEOUT));
-        console.debug("Loaded env: ", runtime == "worker" && JSON.stringify(this.toObject()) || this.toObject());
+        runtime === "worker" && this.envMap.set("workerTimeout", Number(WORKER_TIMEOUT) + Number(CF_BLOCKLIST_DOWNLOAD_TIMEOUT));
+        console.debug("Loaded env: ", runtime === "worker" && JSON.stringify(this.toObject()) || this.toObject());
         globalThis.env = this.toObject();
         this.isLoaded = true;
     }
