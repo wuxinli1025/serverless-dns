@@ -5492,11 +5492,11 @@ class CurrentRequest {
             this.decodedDnsPacket.answers[0].class = "IN";
             this.decodedDnsPacket.answers[0].data = "";
             this.decodedDnsPacket.answers[0].flush = false;
-            if (this.decodedDnsPacket.questions[0].type == "A") {
+            if (this.decodedDnsPacket.questions[0].type === "A") {
                 this.decodedDnsPacket.answers[0].data = "0.0.0.0";
-            } else if (this.decodedDnsPacket.questions[0].type == "AAAA") {
+            } else if (this.decodedDnsPacket.questions[0].type === "AAAA") {
                 this.decodedDnsPacket.answers[0].data = "::";
-            } else if (this.decodedDnsPacket.questions[0].type == "HTTPS" || this.decodedDnsPacket.questions[0].type == "SVCB") {
+            } else if (this.decodedDnsPacket.questions[0].type === "HTTPS" || this.decodedDnsPacket.questions[0].type === "SVCB") {
                 this.decodedDnsPacket.answers[0].data = {
                 };
                 this.decodedDnsPacket.answers[0].data.svcPriority = 0;
@@ -5531,8 +5531,10 @@ class CurrentRequest {
         };
     }
     setCorsHeaders() {
-        for (const [name, value] of Object.entries(corsHeaders())){
-            this.httpResponse.headers.set(name, value);
+        if (this.httpResponse.status >= 200 && this.httpResponse.status < 300) {
+            for (const [name, value] of Object.entries(corsHeaders())){
+                this.httpResponse.headers.set(name, value);
+            }
         }
     }
 }
