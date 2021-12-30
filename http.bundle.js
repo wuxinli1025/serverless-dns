@@ -5531,7 +5531,7 @@ class CurrentRequest {
         };
     }
     setCorsHeaders() {
-        if (this.httpResponse.status >= 200 && this.httpResponse.status < 300) {
+        if (this.httpResponse.ok) {
             for (const [name, value] of Object.entries(corsHeaders())){
                 this.httpResponse.headers.set(name, value);
             }
