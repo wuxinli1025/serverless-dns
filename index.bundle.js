@@ -5380,21 +5380,36 @@ function isBlockable(packet) {
     return hasSingleQuestion(packet) && (packet.questions[0].type === "A" || packet.questions[0].type === "AAAA" || packet.questions[0].type === "CNAME" || packet.questions[0].type === "HTTPS" || packet.questions[0].type === "SVCB");
 }
 function isCname(packet) {
-    return hasAnswers(packet) && packet.answers[0].type === "CNAME";
+    return hasAnswers(packet) && isAnswerCname(packet.answers[0]);
+}
+function isAnswerCname(ans) {
+    return ans && !emptyString(ans.type) && ans.type === "CNAME";
 }
 function isHttps(packet) {
-    return hasAnswers(packet) && (packet.answers[0].type === "HTTPS" || packet.answers[0].type === "SVCB");
+    return hasAnswers(packet) && isAnswerHttps(packet.answers[0]);
 }
-function getCname(answers) {
-    const li = [];
-    li[0] = answers[0].data.trim().toLowerCase();
-    li[1] = answers[answers.length - 1].name.trim().toLowerCase();
-    return li;
+function isAnswerHttps(ans) {
+    return ans && !emptyString(ans.type) && (ans.type === "HTTPS" || ans.type === "SVCB");
 }
-function getTargetName(answers) {
-    const tn = answers[0].data.targetName.trim().toLowerCase();
-    if (tn === ".") return false;
-    return tn;
+function extractAnswerDomains(answers) {
+    if (answers.length <= 0) return [];
+    const names = new Set();
+    for (const a of answers){
+        if (a && !emptyString(a.name)) {
+            const n = a.name.trim().toLowerCase();
+            names.add(n);
+        }
+        if (isAnswerCname(a) && !emptyString(a.data)) {
+            const n = a.data.trim().toLowerCase();
+            names.add(n);
+        } else if (isAnswerHttps(a) && a.data && !emptyString(a.data.targetName)) {
+            const n = a.data.targetName.trim().toLowerCase();
+            if (n !== ".") names.add(n);
+        }
+    }
+    return [
+        ...names
+    ];
 }
 function getQueryName(questions) {
     const qn = questions[0].name.trim().toLowerCase();
@@ -5569,30 +5584,14 @@ DNSResolver.prototype.doh2 = async function(rxid, request) {
     });
 };
 const ttlGraceSec = 30;
-function generateQuestionFilter(blf, dnsPacket) {
-    const q = dnsPacket.questions[0].name;
-    return {
-        [q]: objOf(blf.getDomainInfo(q).searchResult)
+function newCacheFilter(blf, domains) {
+    const cf = {
     };
-}
-function generateAnswerFilter(blf, dnsPacket) {
-    if (isCname(dnsPacket)) {
-        const ans = getCname(dnsPacket.answers);
-        return newAnswerCacheFilter(blf, ans);
-    } else if (isHttps(dnsPacket)) {
-        const ans = getTargetName(dnsPacket);
-        return newAnswerCacheFilter(blf, ans);
+    if (emptyArray(domains)) return cf;
+    for (const d of domains){
+        cf[d] = objOf(blf.getDomainInfo(d).searchResult);
     }
-    return {
-    };
-}
-function newAnswerCacheFilter(blf, ans) {
-    const f = {
-    };
-    for (const name of ans){
-        f[name] = objOf(blf.getDomainInfo(name).searchResult);
-    }
-    return f;
+    return cf;
 }
 function isCacheable(dnsPacket) {
     if (!rcodeNoError(dnsPacket)) return false;
@@ -5611,13 +5610,13 @@ function determineCacheExpiry(dnsPacket) {
     return expiry;
 }
 function makeCacheMetadata(dnsPacket, blf) {
-    const af = generateAnswerFilter(blf, dnsPacket);
-    const qf = generateQuestionFilter(blf, dnsPacket);
+    const domains = extractAnswerDomains(dnsPacket.answers);
+    const cf = newCacheFilter(blf, domains);
     const ttl = determineCacheExpiry(dnsPacket);
     return {
         ttlEndTime: ttl,
         bodyUsed: hasAnswers(dnsPacket),
-        cacheFilter: concatObj(af, qf)
+        cacheFilter: cf
     };
 }
 function createCacheInput(dnsPacket, blf) {
@@ -5664,12 +5663,11 @@ class DNSResponseBlock {
     performBlocking(blockInfo, dnsPacket, blf, cf) {
         if (!hasBlockstamp(blockInfo)) {
             return false;
-        } else if (isCname(dnsPacket)) {
-            return doCnameBlock(dnsPacket, blf, blockInfo, cf);
-        } else if (isHttps(dnsPacket)) {
-            return doHttpsBlock(dnsPacket, blf, blockInfo, cf);
         }
-        return false;
+        if (!isCname(dnsPacket) || !isHttps(dnsPacket)) {
+            return false;
+        }
+        return doResponseBlock(dnsPacket, blf, blockInfo, cf);
     }
     putCache(rxid, cache, url, blf, dnsPacket, buf, event) {
         if (!isCacheable(dnsPacket)) return;
@@ -5738,15 +5736,10 @@ function updateQueryId(decodedDnsPacket, queryId) {
     decodedDnsPacket.id = queryId;
     return true;
 }
-function doHttpsBlock(dnsPacket, blf, blockInfo, cf) {
-    const tn = getTargetName(dnsPacket.answers);
-    if (!tn) return false;
-    return doBlock(blf, blockInfo, tn, cf);
-}
-function doCnameBlock(dnsPacket, blf, blockInfo, cf) {
-    const cn = getCname(dnsPacket.answers);
+function doResponseBlock(dnsPacket, blf, blockInfo, cf) {
+    const names = extractAnswerDomains(dnsPacket.answers);
     let response = false;
-    for (const n of cn){
+    for (const n of names){
         response = doBlock(blf, blockInfo, n, cf);
         if (response.isBlocked) break;
     }
