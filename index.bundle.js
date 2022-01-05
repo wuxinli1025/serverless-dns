@@ -2914,10 +2914,10 @@ class EnvManager {
         config({
             export: true
         });
-        Deno.env.set("RUNTIME", "deno");
     } catch (e) {
         console.warn(".env file may not be loaded => ", e.name, ":", e.message);
     }
+    Deno.env.set("RUNTIME", "deno");
     window.envManager = new EnvManager();
     window.log = new Log(window.env.logLevel, isProd);
     pub("ready");
