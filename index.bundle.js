@@ -2860,7 +2860,7 @@ function _getRuntimeEnv(runtime) {
     }
     return env;
 }
-function _determineRuntimeIfPossible() {
+function _determineRuntime() {
     if (typeof Deno !== "undefined") {
         return Deno.env.get("RUNTIME") || "deno";
     }
@@ -2872,12 +2872,15 @@ function _determineRuntimeIfPossible() {
 }
 class EnvManager {
     constructor(){
-        this.runtime = _determineRuntimeIfPossible();
+        this.runtime = _determineRuntime();
         this.envMap = new Map();
         this.load();
     }
     load() {
         const renv = _getRuntimeEnv(this.runtime);
+        if (this.runtime === "deno" && !renv.runTime) {
+            renv.runTime = "deno";
+        }
         globalThis.env = renv;
         for (const [k, v] of Object.entries(renv)){
             this.envMap.set(k, v);
@@ -2917,7 +2920,11 @@ class EnvManager {
     } catch (e) {
         console.warn(".env file may not be loaded => ", e.name, ":", e.message);
     }
-    Deno.env.set("RUNTIME", "deno");
+    try {
+        Deno.env.set("RUNTIME", "deno");
+    } catch (e1) {
+        console.warn("Deno.env.set() is not available => ", e1.name, ":", e1.message);
+    }
     window.envManager = new EnvManager();
     window.log = new Log(window.env.logLevel, isProd);
     pub("ready");
